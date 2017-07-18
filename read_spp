@@ -1,0 +1,5 @@
+#!/usr/local/bin/perl
+
+printf("0x00000000%08x\n",$$);
+
+exit;

@@ -1,0 +1,41 @@
+#!/bin/sh
+
+if test -e /vobs/sw/bb-sp
+then
+    echo "view ok"
+else
+    echo "no view"
+    exit
+fi
+
+cd /vobs/sw/bb-sp/apps/fc/fcss
+fls .o .a .mk | xargs rm
+rm core*
+rm cup/objx86/cup_test
+cd /vobs/sw
+rm ./bb-sp/mgmt/snmp/sri_snmp/basic/linux.bin/keychg
+rm ./diag/offline/build/offline-dbg.elf
+rm ./diag/offline/build/offline-dbg.sbh
+rm ./diag/offline/build/*.o
+rm ./external/smartmontools/.deps/*.Tpo
+rm ./bb-sp/apps/isc_ping/isc_ping.o
+rm All*
+rm -r lib
+rm cscope.*
+rm /vobs/os/threadx/All*
+cd /vobs/sw/bb-lc/tests/bbtester
+fls .o | xargs rm
+cd /vobs/sw/bb-sp/drivers
+fls .o | xargs rm
+cd /vobs/sanera/ 
+rm mkwk_*.log
+rm -r /vobs/sanera/tools/cache_cs2c
+
+if test "$1" == ""
+then
+  echo "make realclean...."
+  make realclean 2>1 > /dev/null
+else
+  echo "Skipping make realclean"
+fi
+

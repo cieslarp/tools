@@ -1,0 +1,35 @@
+#!/bin/bash
+# Pickview.
+# Select a cleacase view by number from a sorted list. An prefix for
+# the view is given, defaulting to the username.
+
+filter=$1
+shift
+
+function debug() { [[ $DEBUG ]] && echo "$@" 1>&2; }
+
+function set_view() {
+	extra=""
+	debug "set_view ($1) ($2)"
+	if [[ $2 ]]
+	then
+		extra="-exec \"$2\""
+		debug "extra=($extra)"
+	fi
+	export CSCOPE_DB=`get_cscope_db_for_view $1`
+	exec cleartool setview $extra $1
+}
+
+views=( $( cleartool lsview -short "${filter:-${LOGNAME:-$USER}}*" | sort ) )
+
+if [ ${#views[@]} -eq 1 ] 
+then
+	set_view "${views[0]}" "$@"
+
+else
+	select VIEW in ${views[*]}
+	do
+		if [ -n "$VIEW" ] ; then set_view "$VIEW" "$@"; fi
+		if [ "$REPLY" = "0" ] ; then break ; fi
+	done
+fi

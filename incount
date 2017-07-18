@@ -1,0 +1,22 @@
+#!/usr/local/bin/perl
+$lastlnum = 0;
+while ($line = <>) {
+   $lnum++;
+   if ($line =~ /^#/) {
+      $diff = $lnum - $lastlnum;
+      push (@res, sprintf "%-6d: +%-6d : %s",$diff,$lnum,$line );
+      $lastlnum = $lnum;
+   }
+}
+print "Total:".$lnum."\n";
+
+foreach $r (@res) {
+   @s = split(/\s+/,$r);
+   
+   $hlines{$s[6]} += $s[0];
+}
+
+
+foreach $k (sort(keys(%hlines))) {
+   printf "%6d : %s\n",$hlines{$k},$k;
+}

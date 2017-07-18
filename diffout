@@ -1,0 +1,6 @@
+#!/bin/csh
+
+foreach j (`out`)
+  vd $* $j
+#  sleep 1;
+end

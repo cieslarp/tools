@@ -1,0 +1,5 @@
+#!/usr/bin/perl
+
+foreach (`out`) {
+   system("ct diff -graphical $_ &");
+}

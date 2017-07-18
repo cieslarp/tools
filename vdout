@@ -1,0 +1,32 @@
+#!/usr/local/bin/perl
+
+$debug = 0;
+($program) = $0 =~ /.*\/(\w+)out$/;
+print "name = ($0)$program\n" if $debug;
+
+foreach my $arg (@ARGV) {
+	if ($arg =~ /^-/) {
+		push(@Args, $arg);
+	} else {
+		push(@Strings, $arg);
+	}
+}
+
+#my @out = `out`;
+
+#unshift(@ARGV, "-H") if $program =~ /grep/;
+$program = "$program -H" if $program =~ /grep/;
+$program = "ct describe -aattr -all" if $program =~ /des/;
+
+open(OUT, "out |") || die;
+while (my $cofile = <OUT>) {
+	chomp($cofile);
+	my $string = "";
+	if (scalar @Strings) {
+		$string = "\"@Strings\"";
+	}
+	my $command = "$program @Args $string $cofile";
+	print STDERR $command . "\n" if $debug;
+	system($command);
+}
+close(OUT);

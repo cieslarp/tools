@@ -1,0 +1,11 @@
+#!/usr/local/bin/perl -w
+
+my $LogFile = shift || "log.bin.gz";
+$LogFile = "zcat $LogFile |" if ($LogFile =~ /\.gz$/) && (-e $LogFile);
+
+open(LF,$LogFile) || die $!;
+open(ED,"| EventDecoder") || die $!;
+binmode LF;
+binmode ED;
+
+print ED <LF>;

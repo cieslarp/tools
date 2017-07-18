@@ -1,0 +1,7 @@
+#!/usr/local/bin/perl
+
+while (my $arg = <>) {
+	chomp($arg);
+	print STDERR "$arg = " . reverse($arg) . "\n" if $debug;
+	print reverse($arg) . "\n";
+}

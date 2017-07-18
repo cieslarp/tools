@@ -1,0 +1,86 @@
+#!/usr/local/bin/perl
+use File::Basename;
+my ($callingfile) = fileparse($0);
+
+$MaxKids = 20;
+
+$StartIP = shift || die "Usage: $callingfile <one ip in the fabric> <command to execute (use quotes for args)> [expect script: default switchssh]\n" || "10.32.50.77";
+$CmdArgs = shift || "\"/fabos/link_bin/sloterrshow -c 1\"";
+$CmdBase = shift || "switchssh";
+$CmdExtra= shift || "3";
+$Verbose = shift || 0;
+
+#$CmdArgs = "\"/fabos/link_bin/sloterrshow -r \" | grep --line-buffered \"Asic\\\|timeout\"" unless length($CmdArgs);
+$CmdArgs = "\"/fabos/link_bin/sloterrshow -c 1\"" unless length($CmdArgs);
+
+
+foreach my $ip (get_fabric_ips($StartIP)) {
+	$CmdArgs = '"' . $CmdArgs . '"' unless $CmdArgs =~ /^\"/;
+	my $cmd = join(' ', $CmdBase, $ip, $CmdArgs, $CmdExtra);
+	fork_command($cmd);
+}
+
+sleep(1);
+while (my $k = check_kids()) {
+    print "$$ wait for $k kids\n" if $Verbose;
+	sleep(1);
+}
+
+
+
+
+
+#############################################################
+sub get_fabric_ips() {
+	my $ip = shift;
+	my @fs = `switchssh $ip "/fabos/link_bin/fabricshow"`;
+	my @switch_ips = ();
+
+	foreach my $sw (@fs) {
+		if ($sw =~ /fffc/) {
+			my @s = split(/\s+/,$sw);
+			print "switch=($s[5])\n" if $Verbose;
+			push @switch_ips, $s[5];
+		}
+	}
+	return (@switch_ips);
+}
+
+sub fork_command() {
+	my $cmd = shift;
+
+	if (!defined($kidpid = fork())) { die "cannot fork: $!"; } 
+	elsif ($kidpid == 0) {
+		# This is the Child
+		print "$cmd\n";
+		system $cmd;
+		print $$ . ": done\n" if $Verbose;
+		exit;
+	} else { 
+		# This is the Parent
+		print "$$ Add $kidpid to Kids\n" if $Verbose;
+		$Kids{$kidpid}++;
+		if (scalar keys %Kids >= $MaxKids) {
+			check_kids();
+		}
+	}  
+}
+
+sub check_kids()
+{
+    my @skids = sort {$a<=>$b} keys %Kids;
+    foreach my $kid (@skids) {
+        $status = waitpid($kid,1); #NOHANG
+        print STDERR "check_kids[" . scalar @skids . "]: $kid= $status\n" if $Verbose;
+        if ($status < 0) {
+            delete $Kids{$kid};
+        }
+    }
+    if (scalar keys %Kids >= $MaxKids) {
+        print STDERR "check_kids: need to wait for a kid (max=$MaxKids)\n" if $Verbose;
+        my $donekid = wait();
+        print STDERR "check_kids: $donkid done.\n" if $Vebose;
+        delete $Kids{$donekid};
+    }
+    return scalar keys %Kids;
+}

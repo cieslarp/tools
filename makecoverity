@@ -1,0 +1,56 @@
+#!/usr/local/bin/perl
+
+use POSIX qw(strftime);
+#$now_string = strftime "%d%b%Y_%H%M%S", localtime;
+$now_string = strftime "%d%b%Y", localtime; #just do one per day
+
+while (<M*>) { $Makefile++; }
+die "No makefile found in current directory!\n" unless $Makefile;
+
+# Create a temporary work directory for Coverity work files and the final output in HTML format.
+chomp($pwd = `pwd`);
+my @d = split(/\//,$pwd);
+my $folder = "$d[-2]_$d[-1]_$now_string";
+my $dir = `mkdir ~/cov/$folder; cd ~/cov/$folder; pwd`;
+
+# Build the SWBD normally.
+#cd /vobs/projects/springboard/make/ 
+#refresh_view -build xx-yyy-2010.aa:bb:cc
+#date ; make distclean ; emake_wrapper BD=62 ; date
+
+# Invoke Coverity to re-compile and analyze partial tree.  Then generate report in HTML.
+#cd /vobs/projects/springboard/build/swbd62/fabos/src/sys/dev/asic/condor3
+
+chomp($dir);
+print "Coverity temp dir($dir) pwd($pwd)\n";
+
+# Re-compile and analyze everything in this directory.
+#    Skip this to re-compile and analyze only newer (modified) files.
+#    Or remove the ".o" files of the corresponding ".c" files that are to be analyzed.
+#system("make clean");
+
+# the Coverity build
+system("/corp/global/install-dependent/coverity/prevent-linux-4.5.1/bin/cov-build --dir $dir make");
+
+# the Coverity analysis
+system("/corp/global/install-dependent/coverity/prevent-linux-4.5.1/bin/cov-analyze --dir $dir --hfa --user-model-file /corp/global/install-dependent/coverity/prevent-linux-4.5.1/models/all_models.xmldb --enable-callgraph-metrics --enable-fnptr --enable-parse-warnings --enable-constraint-fpp --enable-virtual --all --enable MISSING_LOCK --enable LOCK_FINDER --derived-model-file /corp/global/install-dependent/coverity/prevent-linux64-4.5.1/models/derived-matador-models.xmldb");
+
+# Note: Nightly runs are run from a 64-bit Linux server.  Private runs are run from one of the 32-bit Linux servers.  Models are kept
+# at the 64-bit directory.  That is why the above CLI references a 64-bit directory for the derived model.
+# Note: Derived models are derived from cov-analyze results from nightly runs.  Including a derive model in this private analysis has
+# the benefit of increasing the scope much bigger than a local directory or files while analyzing the local files.  There are other
+# derived models in the directory "/corp/global/install-dependent/coverity/prevent-linux64-4.5.1/models/" for other
+# products: Virgo, Frisco, etc.  The product "FabOS" is for mainline releases such as Eureka, Matador etc.
+# Note:  This example is aggressive in the number of "chekers" enabled.  This will find all the possible defects.  Each team should decide
+# the appropriate checkers to enable or disable.
+# For details on the checkers (and other Coverity subjects), please read the Coverity user documents here: /corp/global/install-dependent/coverity/prevent-linux-4.5.1/doc/
+
+# format the errors
+system("/corp/global/install-dependent/coverity/prevent-linux-4.5.1/bin/cov-format-errors --dir $dir");
+
+# Read the report.
+# From your Windows machine, open a Windows Explorer.  Go to your home directory (in this example: \\hq-samba-1\).
+# Open, or double click, on the following HTML file.  Firefox is slightly better than IE in navigating the pages.
+#/users/home55/pcieslar/tmp/cov_temp/c/output/errors/index.html
+print "\\\\hq-samba-1\\pcieslar\\cov\\$folder\\c\\output\\errors\\index.html\n";
+

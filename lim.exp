@@ -1,0 +1,25 @@
+#!/usr/bin/expect
+log_user 0
+if {[llength $argv]==0} { 
+   puts "lim <host> <lim>"
+   exit 1
+}
+set hostname [lindex $argv 0]
+set lim 0
+if {[llength $argv]>1} { set lim [lindex $argv 1] } 
+
+set limport [expr 21002+(4*$lim)]
+
+set prompt "/# "
+set timeout 5
+set lprompt "INET>"
+spawn telnet $hostname [expr 21002+(4*$lim)]
+set lid $spawn_id
+exp_send -i $lid "\r"
+expect -i $lid $lprompt {} timeout { puts "<<no response from lim>>" }
+exp_send -i $lid "txver\r"
+expect -i $lid $lprompt { puts "$expect_out(buffer)" } timeout { puts "<<no lim txver>>" }
+expect -i $lid $lprompt { puts "$expect_out(buffer)" } timeout { puts "<<no lim txver>>" }
+
+exp_send -i $lid "\r"
+interact "exit" {exit}

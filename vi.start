@@ -1,0 +1,11 @@
+#!/usr/bin/perl
+push(@ARGV,"-") unless scalar(@ARGV);
+foreach my $file (@ARGV) {
+	if ($file =~ /^-d$/) { $debug++; next; }
+	$file =~ s/ /\\ /g;
+    $file =~ s/(:|_|\+)(\d+)(:|_|\+)*$/ +$2/ unless -e $file;
+	print $file . "\n" if $debug;
+    push(@Files,$file);
+	#push(@Files,"\"" . $file . "\"");
+}
+system("$ENV{EDITOR} @Files");

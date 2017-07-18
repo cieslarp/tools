@@ -1,0 +1,26 @@
+#!/usr/local/bin/perl
+
+my $from_branch = shift || "latest";
+my $file = shift || glob("*.[ch]");
+
+$comments = "Merge from $from_branch" unless length($comments);
+if ($from_branch eq "latest")
+{
+    $fver = "-flatest";
+}
+else 
+{
+    $fver = "-fver .../$from_branch/LATEST"; 
+}
+
+open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
+open(LOG,">merge.log") || die;
+for my $file (glob("*.[ch]")) {
+	my $merge = "ct findmerge $file $fver -nback -log /dev/null -c \"$comments\" -unres -merge -gmerge";
+	print  "$merge\n";
+	$out = `$merge`;
+	print LOG $out;
+}
+
+close(LOG);
+#system("/vobs/sanera/tools/merge_report.pl merge.log");

@@ -1,0 +1,37 @@
+#!/usr/local/bin/perl 
+$Branch = "";
+$bg = "";
+@Opts = ();
+$Diff = "vd";
+$Grep = ".";
+foreach $arg (@ARGV) { 
+    if ($arg =~ /^-/) {
+        if ($arg =~ /-g/) {
+            $bg = "&";
+            push(@Opts,$arg);
+        }
+        elsif ($arg =~ /-p/) {
+            $Grep = substr($arg,2);
+        }
+    } else {
+        $Branch = $arg;
+    }
+}
+
+die "$0 <branch name>\n" unless "$Branch";
+
+print STDERR "$Branch: ($Grep)\n";
+open(BF, "ct find -avob -branch 'brtype($Branch)' -print |") || die;
+while (my $f = <BF>) {
+   chomp($f);
+   next unless $f =~ /$Grep/;
+   my ($filepart,$branchpart) = split(/@@/,$f);
+   next if -d ($filepart);
+   next unless $f =~ /\.[c|h]/;
+   my $file_on_branch = "$f/LATEST";
+   my $file_before_branch = $file_on_branch;
+   $file_before_branch =~ s/\/$Branch//;
+   print ("$Diff $file_on_branch $file_before_branch $bg\n");
+   #$ret = system("$Diff $file_on_branch $file_before_branch $bg");
+   #sleep 1;
+}

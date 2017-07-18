@@ -1,0 +1,16 @@
+#!/usr/local/bin/perl
+my $count = 1;
+
+#add an incrementing number to the beginning of every input line
+while (my $line = <>) { print $count++ . ":$line"; }
+exit;
+
+#not sure what this script was good for
+my $start = shift;
+my $end = shift;
+my $befst = shift || "";
+my $aftst = shift || "";
+my @r = ($start .. $end);
+foreach $num (@r) {
+	print "$befst$num$aftst\n";
+}

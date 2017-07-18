@@ -1,0 +1,3 @@
+#!/usr/local/bin/bash
+
+grep $1 /view/sreadm_makeview_vu/vobs/multisite/sreglobal/gk_authlists/common

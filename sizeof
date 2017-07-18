@@ -1,0 +1,18 @@
+#!/usr/local/bin/perl
+
+$file = shift || die "$0 <objfile>";
+$type = `file $file`;
+$pre = "";
+if ($type =~ /MIPS/) {
+   $pre = "/nfs/sw/tools/mvista/3.0/hardhat/devkit/mips/fp_be/bin/mips_fp_be-";
+}
+system($pre."size $file");
+
+
+
+#@output = `nm --print-size --size-sort --radix=decimal -C $file | sort -n`;
+#$first = shift(@output);
+#$last  = pop(@output);
+#@f = split(/ /,$first);
+#@l = split(/ /,$last);
+#print "$l[0] - $f[0] = ".($l[0]-$f[0])."\n";

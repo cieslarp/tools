@@ -1,0 +1,51 @@
+#!/usr/bin/expect
+# switchconsole
+# Connect to a avocent console of a switch
+#
+# Example:
+#  > switchconsole 10.31.186.1 3020
+set dbg 0
+
+if {[llength $argv]<1} { 
+   puts "$argv0 <host> <port>"
+   exit 1
+}
+set hostname [lindex $argv 0]
+set port     [lindex $argv 1]
+set dbg      [lindex $argv 2]
+
+log_user $dbg 
+
+match_max -d 10000000
+set timeout 60 
+
+set CTRLZ \032
+if {$port < 1000} {
+	set base $port
+	set port [expr $port + 3000]
+} else {
+	set base [expr $port & 0xff]
+}
+puts "port=$port"
+puts "base=$base"
+spawn telnet $hostname $port
+
+log_user 1
+expect "login:" { send "port$base\r";}
+expect "Password: " { send "pass\r";}
+set timeout 2
+expect {
+	"Enter your option :" { send "1\r"; }
+	timeout { send "\r" }
+}		
+send "\r"
+	
+interact {
+	-reset $CTRLZ {exec kill -STOP [pid]}
+	\035  {puts ""; send_user ">"; interact {
+		"exit" { puts "Exit!"; inter_return }
+		-nobuffer \015 { puts "."; return; }
+		}
+	}
+	eof { puts "[eof]"; inter_return; }
+}

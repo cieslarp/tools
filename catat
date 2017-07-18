@@ -1,0 +1,20 @@
+#!/usr/bin/perl
+
+$file = shift || die "$0 <file> <startline> <amount>\n";
+$start = shift || 0;
+$lines = shift || 10;
+
+
+$start -= ($lines/2) if $start > ($lines/2);
+
+print "$file $start $lines\n";
+if (open(F,$file)) {
+   for (1..$start) {
+      $l = <F>;
+   }
+   for (1..$lines) {
+      $l = <F>;
+      print $l;
+   }
+   close(F);
+}

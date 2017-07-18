@@ -1,0 +1,33 @@
+#!/usr/bin/expect
+log_user 0
+if {[llength $argv]==0} { 
+   puts "fpstate <ip> <lim>"
+   exit 1
+}
+set hostname [lindex $argv 0]
+set stlim 0
+set count 0
+if {[llength $argv]>1} { set stlim [lindex $argv 1] } 
+if {[llength $argv]>2} { set count [lindex $argv 2] } 
+
+for {set lim $stlim} {$lim<($stlim+$count+1)} {incr lim} {
+    if {$count > 0} {puts "---------$lim----------" }
+    set limport [expr 21002+(4*$lim)]
+    set prompt "INET>"
+    set timeout 2
+    while 1 {
+       spawn telnet $hostname $limport 
+       send "\r"
+       expect {
+          $prompt { break } 
+          "Port already connected" { puts "Port already connected"; exit }
+          timeout { puts "." }
+       }
+    }
+    send "fpstate"
+
+    expect $prompt 
+    send "\r"
+    expect $prompt {puts "$expect_out(buffer)"}
+    close
+}

@@ -1,0 +1,11 @@
+#!/usr/local/bin/perl
+
+$from_branch = shift;
+
+open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
+print "ct findmerge @ARGV -fver .../$from_branch/LATEST -nback -log fmerge.log -nc -unres -abort -merge"."\n";
+$out =`ct findmerge @ARGV -fver .../$from_branch/LATEST -nback -log fmerge.log -nc -unres -abort -merge`;
+open(LOG,">merge.log") || die;
+print LOG $out;
+close(LOG);
+system("/vobs/sanera/tools/merge_report.pl merge.log");

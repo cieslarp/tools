@@ -1,0 +1,20 @@
+#!/usr/local/bin/perl
+
+
+while (my $line = <>) {
+	my @s = split(/\s+/,$line);
+
+	for my $i (0..scalar(@s)+1) {
+		if ($s[$i] =~ /^0x(\w+)/) {
+			$ColSum[$i] += hex($s[$i]);
+		} else {
+			$ColSum[$i] += int($s[$i]);
+		}
+	}
+	print $line;
+}
+
+foreach my $cs (@ColSum) {
+	print $cs . "\t";
+}
+print "\n";

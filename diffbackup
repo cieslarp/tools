@@ -1,0 +1,15 @@
+#!/usr/local/bin/perl
+
+my $backup = shift;
+die "$0 <backup file>\n" unless (-e $backup);
+
+my @backupfiles = `tar ztf $backup`;
+print `tar zxvf $backup -C ~/backup`;
+
+foreach my $file (@backupfiles) {
+	chomp($file);
+	my $backfile = "~/backup/" . $file;
+	my $viewfile = "/" . $file;
+    print("vd $viewfile $backfile\n");
+	system("vd $viewfile $backfile");
+}

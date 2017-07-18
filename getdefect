@@ -1,0 +1,347 @@
+#!/usr/local/bin/perl
+
+my $Quick = $0 =~ /quick/;
+my $Defect = shift || die "$0 <defect number>\n";
+my $Tdec = shift || "tracedecode.FOS";
+my $Debug = shift;
+my $BaseDir = "/scratch/fos-brm/" . $ENV{USER};
+$BaseDir = $ENV{HOME} unless -e $BaseDir;
+
+#my $CCView = "swrel_v6.1.0a_ga";
+#system("ct startview $CCView") unless -d "/view/$CCView/vobs/projects/sprigboard/build/swbd62";
+#my $Tdec = shift || "/view/$CCView/vobs/projects/springboard/build/swbd62/fabos/src/utils/trace/tracedecode.linux";
+
+unless ($Tdec) {
+	foreach my $bd (</vobs/projects/springboard/build/swbd*/fabos/src/utils/trace/tracedecode.linux>) {
+		print $bd . "\n" if $Debug;
+		$Tdec = $bd if -e $bd;
+	}
+}
+$Tdec = "tracedecode" unless $Tdec;
+print "Tdec=[$Tdec]\n";
+
+if ((-e $Defect) && !(-d $Defect)) {
+	if ($Defect =~ /(.*)\.gz$/) {
+		my $unzip = $1;
+		system("gunzip --force \"$Defect\"");
+		$Defect = $unzip if -e $unzip;
+	}
+	decode_dmp($Defect) unless $Quick;
+	exit;
+}
+
+$base = int($Defect/1000) * 1000;
+$tbase = int($Defect/10000) * 10000;
+
+unless (-d $Defect) {
+	chdir($BaseDir . "/debug");
+	$ddir = $BaseDir . "/debug/$Defect";
+	unless (-d $ddir) {
+		print "$ddir not found\n";
+		$dir = "/proj/sj_eng/defects/$base/$Defect";
+		$dir = "/proj/sj_eng/defects/$tbase/$Defect" unless -d $dir;
+		$dir = "/proj/sj_eng/defects/$tbase/$tbase/$Defect" unless -d $dir;
+		$dir = "/proj/sj_eng/defects/$Defect" unless -d $dir;
+		$dir = "/proj/sj_eng/defects/scalers/$Defect" unless -d $dir;
+		$dir = "/departments/fvt/intgtest/defects/$Defect" unless -d $dir;
+		chomp($dir = "/proj/sj_eng/defects/" . `find /proj/sj_eng/defects -name "*$Defect*"`) unless -d $dir;
+
+		print "Get files from: $dir\n";
+		mkdir $ddir;
+		if (-d $dir && $dir =~ /\d+/) {
+			system("cp -r $dir/* $ddir");
+		} else {
+			die "Defect directory not found!\n";
+		}
+	} else {
+		die "$ddir already exists!\n"
+	}
+} elsif ($Defect =~ /^\//) {
+	my @s = split(/\//,$Defect);
+	$ddir = $BaseDir . "/debug/" . pop(@s);
+	print "cp -r \"$Defect\" \"$ddir\"\n";
+	system("cp -r \"$Defect\" \"$ddir\"");
+	chdir($BaseDir . "/debug");
+} elsif ($Defect =~ /^\.$/) {
+	$ddir = `pwd`;
+	chomp($ddir);
+	print "Decode this dir: " . $ddir . "\n";
+} else {
+	$ddir = $Defect;
+}
+
+chomp($fullddir = `cd $ddir; pwd`);
+$ddir = $fullddir if ($fullddir =~ /$Defect/);
+print "Dest dir: $ddir\n";
+
+decode_dir($ddir);
+
+sub decode_dir() {
+	my $decdir = shift;
+	my $Active_cp = ".";
+	#return if $decdir =~ /core_files/;
+	print "decode $decdir\n";
+	if (-d "$decdir") {
+		$decdir = nospace($decdir);
+		chdir($decdir);
+
+		foreach my $spacefile (<*\ *>) {
+			nospace($spacefile);
+		}
+
+		if (<*.GZ*>) {
+			system("rename .GZ .gz *.GZ**");
+		}
+
+		if (<-S*>) {
+			system("rename -S S -S*");
+		}
+
+		if (<*\)*>) {
+			system('rename \) _ *\)*');
+		}
+
+		if (<*.support.tar*>) {
+			print "rename support.tar files\n";
+			system("rename support.tar supt.t *.support.tar*");
+		}
+
+		foreach my $gz (<*.gz>) {
+			next if $gz =~ /regdump/i;
+			next if $gz =~ /CORE_FFDC/;
+			next if $gz =~ /\.support/;
+			next if $gz =~ /core/;
+			next if $gz =~ /MP_LOG/;
+			print "unzip $gz\n" if $Debug;
+			system("gunzip --force -- \"$gz\"") unless -d $gz;
+		}
+
+		foreach my $tar (<*.tar>) {
+			next if $tar =~ /regdump.tar/i;
+			next if $tar =~ /ftrace.tar/i;
+			next if $tar =~ /SSall.tar/i;
+			printf "untar $tar\n" if $Debug;
+			system("tar xvf \"$tar\"\n") unless $Quick;
+		}
+
+		print "supportdecode $decdir\n" if $Debug;
+		system("supportdecode \"$decdir\"");
+
+		if (-e "trace_id.dat" && !$Quick) {
+			print "Found trace_id.dat in $decdir, do '$Tdec -d $decdir'\n";
+			system("$Tdec -d $decdir");
+			foreach my $txt (<*.txt>) {
+				print "tracedecoded: process $txt\n";
+				decode_dmp($txt, "&");
+			}
+		}
+
+		foreach my $dmp (<*CTRACE*>) {
+			next if $Quick;
+			print "CTRACE: $dmp\n" if $Debug;
+			next if $dmp =~ /\.sorted/;
+			next if $dmp =~ /\.od/;
+			#next if $dmp =~ /\.txt/;
+			
+			print "CTRACE: do decode $dmp\n" if $Debug;
+			decode_dmp($dmp, "&");
+		}
+		foreach my $dmp (<*.dmp>) {
+			next if $Quick;
+			next if $dmp =~ /ctrc/;
+			next if $dmp =~ /CTRACE_/;
+			next if $dmp =~ /BTRACE_/;
+			next if $dmp =~ /DTRACE/;
+			next if $dmp =~ /FTRACE/;
+			next if $dmp =~ /wlv/i;
+			next if $dmp =~ /hawk/i;
+			decode_dmp($dmp,"&");
+		}
+
+		unless ($Quick) {
+			foreach my $j (<*SUPPORTSHOW_ALL*>) {
+				# SLOT6cp-BB2_CDCX_115031-201104211550-SUPPORTSHOW_ALL
+				my ($slot,$desc,$dt,$name) = split(/-/,$j);
+				my $super = (get_active_slot($desc) == get_file_slot($j)) ? "super" : "";
+				my $ssout = $desc . "-S" . get_file_slot($j) . "cp-" . $dt . "." . $super . "SSall";
+
+				if (open(SA, "cat $j |")) {
+					while (my $ssa = <SA>) {
+						if ($ssa =~ /^FILE\s+:\s+(.*)$/) {
+							my $ssfile = $1;
+							print "processed file: ($ssfile) by ($ssout)\n" if $Debug;
+							$Processed{$ssfile} = $ssout;
+						}
+					}
+				}
+
+				print "SUPPORTSHOW_ALL[$j] to ($ssout)\n";
+				system(`mv $j $ssout`);
+			}
+
+			foreach my $j (<*SSHOW_*>,<*AN_DEBUG*>) {
+				#Switch0-S0-200808221249-SSHOW_FABRIC
+				next if $j =~ /SSall/;
+				my ($ss,$sst) = split(/SSHOW_|AN_DEBUG/,$j,2);
+				my ($dat,$sw) = split(/-/,reverse($ss), 2);
+				$sw = reverse($sw);
+				$dat = reverse($dat);
+				$lowdate{$sw} = $dat unless defined $lowdate{$sw};
+
+				my $super = (get_active_slot($sw) == get_file_slot($j)) ? "super" : "";
+				#my $active = <*$sw*RTE*>;
+				#$ActiveCP{$sw} = $active unless defined $ActiveCP{$sw};
+
+				#if ($ActiveCP{$sw}) {
+					#($Active_cp) = ($ActiveCP{$sw} =~ /-(S.+cp)-/);
+					#print "ACTIVE ($Active_cp) [$active]\n" if $Debug;
+					#$super = "super";
+					#}
+
+				my $ssout = $sw . (($sw) ? "-" : "") . $lowdate{$sw} . $super . "SSall";
+				my $sstar = $sw . (($sw) ? "-" : "") . $lowdate{$sw} . uc($super) . "SSall.tar";
+				print "ss=[$ss] sst=[$sst] sw=[$sw] dat=[$dat] ssout=[$ssout]\n" if $Debug;
+				if ($Processed{$j}) {
+					if ($Processed{$j} ne $ssout) {
+						print "Mismatching ALL file: prev[$Processed{$j}] new[$ssout]\n";
+					}
+				}
+				if (!$Processed{$j} && open(SS,">>$ssout")) {
+					print SS "=== $j ===\n";
+					print SS `cat -- "$j"`;
+					close SS;
+					$Processed{$j} = $ssout;
+				}
+
+				move_to_tar($sstar, $j);
+			}
+		}
+
+		foreach my $ift (<*IF_TREE*>) {
+			my $ifd = $ift;
+			$ifd =~ s/IF_TREE.*/ift.dec/g;
+			print "IF_TREE($ift) dec($ifd)\n" if $Debug;
+			system("if_tree_decode.pl $ift > $ifd");
+		}
+
+		foreach my $ss (glob("*.ss")) {
+			print "rm $ss\n", if $Debug;
+			system("rm -f \"$ss\"");
+		}
+		#foreach my $j ("*SUP*", "*.tar", "core.*", "misc.*", 
+		#"*.ffdc", "*LOG", "*LOGS", "*RTE", "*_evlog", "*Log",
+		#"*SSHOW*", "*DBG*", "*HASMLOGSAVE", "*AGDUMP", "*VFSWITCH",
+		#"*CONSOLE.", "*BURNINERR", "*VFCHASSIS", "*FABRIC", "*RAS", "*RAS_POST",
+		#"*DIAG", "*CRYP", "*MAPS", "*regdump.dmp", "*.txt") {
+		foreach my $j ("*") {
+			print "zipping $j\n" if $Debug;
+			foreach my $zf (glob($j)) {
+				my $in_process = 0;
+				foreach my $d (@Decoding) {
+					if ($zf eq $d) {
+						print "Skip zip for $zf\n" if $Debug;
+						$in_process = 1;
+						last;
+					}
+				}
+				next if $in_process;
+				#next if $zf =~ /tracedump\./;
+				#next if $zf =~ /TRACE/;
+				if (-e $zf) {
+					print "zf $zf\n" if $Debug;
+					system("gzip --force -q \"$zf\"");
+				}
+			}
+		}
+	} else {
+		print "$decdir not found!\n";
+	}
+	foreach my $subdir (<$decdir/*>) {
+		decode_dir($subdir) if -d $subdir;
+	}
+}
+
+sub decode_dmp() {
+	my $dmp = shift;
+	my $bg = shift || "";
+	my $txt = $dmp;
+	$txt =~ s/\.dmp$|\.od$/.txt/;
+	$txt .= ".txt" unless $txt =~ /\.txt/;
+	my $txts = $txt;
+	$txts =~ s/\.txt$/.sorted/;
+	if ($dmp =~ /dmp|od/ && (! -e $txt)) {
+		if (-e "trace_id.dat.gz") {
+			system("gunzip --force trace_id.dat.gz");
+			printf "unzip trace_id.dat\n" if $Debug;
+		}
+
+		print "dmp=[$dmp] txt=[$txt] sorted[$txts]\n";
+		push(@Decoding, $dmp, $txt, $txts) if $bg =~ /&/;
+		system("($Tdec -a \"$dmp\" > \"$txt\"; compact_all \"$txt\" > \"$txts\"; gzip -f -- \"$dmp\"; gzip -f -- \"$txt\"; gzip -f -- \"$txts\")$bg");
+	} else {
+		print "txt=[$txt] sorted[$txts]\n";
+		system("(compact_all \"$txt\" > \"$txts\"; gzip -f -- \"$txt\"; gzip -f -- \"$txts\")");
+	}
+}
+
+sub nospace() {
+	my $file = shift;
+
+	if ($file =~ /\s/) {
+		my $nospfile = $file;
+		$nospfile =~ s/\s+/_/g;
+		print "file[" . $file . "] nosp[" . $nospfile . "]\n";
+		return $file if -e $nospfile;
+		system("mv -v -- \"$file\" \"$nospfile\"");
+		$file = $nospfile;
+	}
+
+	return $file;
+}
+
+sub get_active_slot() {
+
+	my $sw = shift;
+	my $active = "";
+	foreach my $f (glob("*" . $sw . "*RTE*")) {
+		$active = $f if $f =~ /RTE/;
+	}
+	print "ACTIVE($sw): f($active)\n" if $Debug;
+	return (get_file_slot($active));
+}
+
+sub get_file_slot() {
+
+	my $file = shift;
+	my $slot = 0;
+
+	if ($file =~ /S.*(\d+)cp/) {
+		$slot = $1;
+		print "get_file_slot($file) slot[$slot]\n" if $Debug;
+	}
+
+	return $slot;
+}
+
+sub move_to_tar() {
+	my $tar = shift;
+	my $file = shift;
+	my $remove = 0;
+	my $taropt = ($Debug) ? "v" : "";
+
+	printf "tar opt($taropt) tf($tar) f($file)\n" if $Debug;
+	system("tar -u" . $taropt . "f $tar $file");
+
+	foreach my $line (`tar tf $tar`) {
+		if ($line =~ /$file/) {
+			$remove++;
+			last;
+		}
+	}
+
+	if ($remove) {
+		print "remove $file\n" if $Debug;
+		#system("rm $file");
+	}
+	return ($remove);
+}

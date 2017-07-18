@@ -1,0 +1,36 @@
+#!/usr/local/bin/perl
+
+#ct lsview -long pcieslar_v6.4.0_pit_c                                                                                                                                                 [9:42am]
+#Tag: pcieslar_v6.4.0_pit_c "srtmkview:dev:fos:v6.4.0_pit_a"
+#  Global path: /net/ccvw5/vws2/pcieslar_v6.4.0_pit_c.vws
+#  Server host: ccvw5
+#  Region: sjcunx_all_vobs
+#  Active: NO
+#  View tag uuid:5ff4d59a.04b411df.90d0.00:16:3e:37:b4:02
+#  View export ID (registry): 11
+#View on host: ccvw5
+#View server access path: /vws2/pcieslar_v6.4.0_pit_c.vws
+#View uuid: 5ff4d59a.04b411df.90d0.00:16:3e:37:b4:02
+#View owner: brocade.com/pcieslar
+#
+#: ct rmtag -all -view pcieslar_v6.4.0_pit_c                                                                                                                                            [10:12am]
+#: ct unregister -view -uuid 5ff4d59a.04b411df.90d0.00:16:3e:37:b4:02                                                                                                                   [10:12am]
+#: /bin/rm -fr /net/ccvw5/vws2/pcieslar_v6.4.0_pit_c.vws                                 
+
+my $tag = shift || die "$0 <tag>\n";
+my $ct = "/opt/rational/clearcase/bin/cleartool";
+
+my @long = `$ct lsview -long $tag`;
+print @long if $debug;
+foreach my $line (@long) {
+	chomp($line);
+	$line =~ s/\s+//g;
+	my ($k,$v) = split(/:/,$line,2);
+	print "k[$k] = v[$v]\n" if $debug;
+	$View{$k} = $v;
+}
+
+print "ct rmtag -all -view $tag\n";
+print "ct unregister -view -uuid $View{Viewuuid}\n";
+print "/bin/rm -fr $View{Globalpath}\n";
+printf "/bin/rm -fr /zzz/work05/pcieslar/dyn_view_rstg/%s.stg\n", $tag;

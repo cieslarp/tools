@@ -1,0 +1,196 @@
+#!/usr/bin/expect
+
+set dbg 1
+set hosts {10.38.68.131 10.38.68.132 10.38.68.133 10.38.68.134}
+set ports {0 1 2 3 4 5 6 7}
+set pdelay 5
+set hdelay 5
+
+if {[llength $argv]<1} { 
+   puts "$argv0 <cmd>"
+   exit 1
+}
+set command [lindex $argv 0]
+#set dbg      [lindex $argv 1]
+if {[llength $argv]>1} {
+	set hosts [split [lindex $argv 1] ,]
+}
+if {[llength $argv]>2} {
+	set ports [split [lindex $argv 2] ,]
+}
+
+set bounce [string match -nocase "bounce" $command]
+set offline [string match -nocase "offline" $command]
+set online [string match -nocase "online" $command]
+
+if {$offline} {
+	set pdelay 0
+	set hdelay 0
+}
+
+
+if {[llength $hosts]==1} { set pdelay 0 }
+if {[llength $ports]==1} { set hdelay 0 }
+
+#set hosts {10.38.68.131 }
+#set ports {0 1 2 3 4 5 }
+
+
+puts "command{$command}, hosts{$hosts}, ports{$ports} hdelay{$hdelay} pdelay{$pdelay}\r"
+
+log_user 0
+set timeout 20
+
+
+
+proc port_cmd { hid port cmd } {
+	global expect_out
+	exp_send -i $hid "echo $cmd > /port$port/port\r"
+	expect -i $hid \
+		"]# " { puts "port_cmd: $hid $port $cmd" } \
+		timeout { puts "timeout on cmd($cmd), host{$host}\r"; return 0 }
+}
+
+proc port_status { hid port status {var "PortState"} } {
+	global expect_out
+	set ret 0
+	exp_send -i $hid "cat /port$port/port | grep $var\r"
+	expect -i $hid \
+		$status { puts "Found: $status in $var\r"; set ret 1} \
+		"]# " { puts "$var: not $status"; return 0 } \
+		timeout { puts "timeout on cmd($cmd), host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"]# " { } \
+		timeout { puts "timeout on cmd($cmd), host{$host}\r"; return 0 }
+
+	return $ret
+}
+
+proc do_login { hid } {
+	global host expect_out
+
+	expect -i $hid \
+		"login:" { exp_send -i $hid "vlun\r" } \
+		timeout { puts "timeout on login, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"Password:" { exp_send -i $hid "SANBlaze\r" } \
+		timeout { puts "timeout on password, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"]$ " { exp_send -i $hid "su\r" } \
+		timeout { puts "timeout on vlun prompt, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"Password:" { exp_send -i $hid "pass\r" } \
+		timeout { puts "timeout on password, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"]$ " { exp_send -i $hid "su\r" } \
+		"]# " { return 1 }\
+		timeout { puts "timeout on root prompt, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"Password:" { exp_send -i $hid "SANBlaze\r" } \
+		timeout { puts "timeout on su password, host{$host}\r"; return 0 }
+
+	expect -i $hid \
+		"]# " { return 1 } \
+		timeout { puts "timeout on su, host{$host}\r"; return 0 }
+
+	puts "Unknown su password!\r"
+	return 0
+}
+foreach host $hosts {
+	puts "spawning $host...\r"
+	spawn telnet $host
+	set hid $spawn_id
+	if {[do_login $hid]} {
+		# array set host_ids {$host $hid}
+        set host_ids($host) $hid 
+	}
+}
+
+foreach {host hid} [array get host_ids] {
+	puts "Host list: host{$host} hid{$hid}\r"
+}
+
+
+if {$online} {
+	foreach {host hid} [array get host_ids] {
+		puts "Online for $host $hid\r"
+		foreach port $ports {
+			set ps [port_status $hid $port "Online"]
+			puts "Port $port is Online=$ps\r"
+			if {$ps == 1} {
+				continue
+			}
+
+			if {[port_status $hid $port "Offline" "RequestedState"] == 1} {
+				port_cmd $hid $port "Online"
+			} else {
+				port_cmd $hid $port "Offline"
+				sleep 1
+				port_cmd $hid $port "Online"
+			}
+
+			for { set i 1 } { $i <= 10 } { incr i } {
+				if {[port_status $hid $port "Online"] == 1} {
+					break
+				} else {
+					sleep 1
+					puts "wait for Online count $i\r"
+				}
+			}
+		}
+	}
+	exit 0;
+}
+
+foreach port $ports {
+	puts "Port $port\r"
+	foreach {host hid} [array get host_ids] {
+		puts "$host $hid\r"
+		if {$bounce} {
+			port_cmd $hid $port "Offline"
+		} else {
+			port_cmd $hid $port $command
+			if {$online} {
+				while {[port_status $hid $port "Online"] == 0} {
+					sleep 1
+				}
+			} else {
+				sleep $hdelay
+			}
+		}
+	}
+
+	if {$bounce} {
+		foreach {host hid} [array get host_ids] {
+			sleep $hdelay
+			puts "$host $hid\r"
+			port_cmd $hid $port "Online"
+		}
+	}
+	sleep $pdelay 
+}
+
+foreach {host hid} [array get host_ids] {
+	puts "$host done\r"
+	close $hid
+}
+
+#foreach host $hosts {
+
+	#spawn telnet $host
+	#if {[do_login]} {
+		#foreach port $ports {
+			#port_cmd $hid $port $command
+			#sleep 1
+		#}
+	#}
+	#close
+	#puts "$host done\r"
+#}
+puts ".\r"

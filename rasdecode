@@ -1,0 +1,7 @@
+#!/usr/local/bin/perl
+
+my $switchip = shift || die "$0 <ip> [args]\n";
+@args = @ARGV;
+
+print `switchssh $switchip \"rasdecode @args\"`
+

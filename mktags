@@ -1,0 +1,9 @@
+#!/usr/local/bin/perl
+
+$view = `ct pwv -s`;
+chomp $view;
+print $view."\n";
+if ($view !~ /NONE/) {
+   printf "ctags: /vobs/sw";
+   system("ctags -f /vobs/sw/tags -R /vobs/sw/ &");
+}

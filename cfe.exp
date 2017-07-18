@@ -1,0 +1,27 @@
+log_user 0
+set timeout 1 
+set hostname [lindex $argv 0]
+set port     [lindex $argv 1]
+
+proc SetEnv { } {
+    global hostname
+    global port
+    spawn telnet $hostname $port
+    expect {
+       "Intrepid" { 
+        send "setenv STARTUP 1\r"
+        send "setenv STARTUP 1\r"
+        send "setenv STARTUP 1\r"
+        send "setenv STARTUP 1\r"
+        send "setenv STARTUP 1\r"
+        send "setenv STARTUP 1\r"
+        return 1
+       }
+       timeout { puts "timeout"; return 0}
+       eof     { puts "eof"; return 0}
+    }
+}
+set r 0
+while {$r == 0} {
+    set r [SetEnv]
+}

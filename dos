@@ -1,0 +1,50 @@
+#!/usr/local/bin/perl
+$startdir = ".";
+foreach $arg (@ARGV)
+{
+   if ($arg =~ /^-/) {
+      $recurse if lc($arg) =~ /-r/;
+   } else {
+      $startdir = $arg;
+   }
+}
+
+check_for_dos_files($startdir);
+
+sub check_for_dos_files() {
+   my $file;
+   my $dir = shift;
+   opendir(THISDIR,$dir) || die "$dir: $!\n";
+   my @files = readdir(THISDIR);
+   closedir(THISDIR);
+   foreach $file (@files)
+   {
+      next if $file =~ /^\.+$/;
+      my $ffile = $dir."/".$file;
+      #print ">>".$ffile."\n";
+      if (-d $ffile) {
+         check_for_dos_files($ffile);
+      }
+      elsif (-r $ffile && $file =~ /\.cpp$|\.h$|Make|\.c$/) {
+         print "$ffile\n" if search_for_dos_return($ffile);
+      } 
+   }
+}
+
+sub search_for_dos_return() {
+   my $f = shift;
+   @ach = ();
+   open(HFILE,$f) || die "$f : $!\n";
+   binmode(HFILE);
+   while (read(HFILE,$c,1)) {
+      if (ord($c) == 0x0d) {
+         read(HFILE,$c2,1);
+         if (ord($c2) == 0x0a) {
+            close(HFILE);
+            return 1;
+         }
+      }
+   }
+   close(HFILE);
+   return 0;
+}

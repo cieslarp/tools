@@ -1,0 +1,8 @@
+#!/usr/local/bin/perl
+my $search = shift;
+
+@dist = `grep -e THIS_PRODUCT -e SWBD /vobs/projects/springboard/dist/Makefile`;
+foreach my $d (@dist) {
+	$this_product = $1 if $d =~ /if.*THIS_PRODUCT.*\"(\w+)\"/;
+	printf "Build:%s %s", $this_product, $d if $d =~ /$search/i;
+}

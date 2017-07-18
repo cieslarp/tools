@@ -1,0 +1,11 @@
+#!/usr/local/bin/perl
+
+foreach my $b (@ARGV) {
+	find_blade_id($b);
+}
+
+sub find_blade_id() {
+	my $blade = shift;
+	my $blade = sprintf("%x",$blade);
+	print `grep BLADE_ID /vobs/projects/springboard/common_src/fos/common/include/fos_swbd.h | grep -i $blade`;
+}

@@ -1,0 +1,71 @@
+#!/usr/local/bin/perl
+use POSIX qw(strftime);
+$| = 1;
+
+$debug = shift;
+$count = 0;
+$move_swbd = 0;
+
+# save off any cfg or sim files for rte simulator
+@cfgfiles = glob("/vobs/projects/springboard/fabos/src/sys/route/new/simulator/*.cfg");
+if (scalar @cfgfiles) {
+	$now_string = strftime "%d%b%Y_%H%M%S", localtime;
+	print "$now_string";
+
+	$tmp = "/tmp/" . $now_string . ".wipesave";
+	if (! -d $tmp) { mkdir($tmp) }
+	foreach $cfgf (@cfgfiles) {
+		print "Save $cfgf to $tmp\n";
+		system("cp -f $cfgf $tmp");
+	}
+}
+
+foreach $swbd (</vobs/projects/springboard/build/swbd*>) {
+	print "remove [$swbd]\n";
+	if (-d $swbd) {
+		$del_swbd = $swbd;
+		if ($move_swbd) {
+			if ($swbd =~ /_TO_BE_DELETED/) {
+			} else  {
+				$del_swbd = $swbd . "_TO_BE_DELETED";
+				system("mv $swbd $del_swbd");
+			}
+		}
+		system("rm -rf $del_swbd" . (($move_swbd) ? "&" : "") );
+	}
+}
+
+print " " x 105 if $debug;
+open(PRIV, "/opt/rational/clearcase/bin/cleartool lsprivate |") || die;
+while (my $f = <PRIV>) {
+	chomp($f);
+	if ($f =~ /cscope\.out|\.t4f$|\.files$|\.tokens$/) {
+	#system("link_cscope $f");
+		next;
+	}
+	next unless -e $f; 
+	if ($f =~ /_TO_BE_DELETED/) {
+		$skipped++;
+		next;
+	}
+	$f =~ s/\$/\\\$/g;
+	if (-d $f) {
+		print `rm -rf $f`;
+	} else {
+		print `rm -f $f &`;
+	}
+	++$count;
+	if ($debug) {
+		print chr(8) x 105;
+		printf "%8d: %95s", $count, substr($f, -95);
+	}
+}
+
+print "\nRemoved $count.\n";
+print "Skipped $skipped.\n" if $skipped > 0;
+
+if (scalar @cfgfiles) {
+	print "Restored: " . scalar @cfgfiles . " .cfg files\n";
+	system("cp $tmp/* /vobs/projects/springboard/fabos/src/sys/route/new/simulator/");
+	#rmdir($tmp);
+}

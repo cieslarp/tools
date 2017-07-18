@@ -1,0 +1,9 @@
+#!/usr/bin/perl
+
+@cpu = `cat /proc/cpuinfo`;
+foreach my $line (@cpu) {
+    print $line if ($line =~/bogomips/);
+    push (@bogs, $1) if ($line =~/bogomips\s+:\s+([0-9]+\.*[0-9]+)/);
+}
+foreach my $bm (@bogs) { $total += $bm; }
+print join('+',@bogs) . " = " . $total . "\n";

@@ -1,0 +1,19 @@
+#!/usr/local/bin/perl
+
+foreach my $arg (@ARGV) {
+	push(@Files, $arg) if -e $arg;
+}
+
+@Files = `out` unless scalar @Files;
+
+foreach my $f (@Files) {
+	chomp($f);
+	my @diffs = `td $f`;
+	my $count = scalar @diffs;
+	print "$f: $count\n";
+	push (@unco, $f) if ($count == 1) || ($diffs[1] =~ / are identical/);
+}
+
+foreach my $u (@unco) {
+	print "cleartool unco -rm $u\n";
+}

@@ -1,0 +1,97 @@
+#!/usr/local/bin/perl
+
+my $String = shift;
+my $File = shift || die "$0 <grep string || defect number> <clearcase filename>\n";
+my $Debug = shift;
+my $DefectSearch = ($String =~ /^\d{6}$/);
+my $s = "-s -nco" unless $DefectSearch;
+
+#Convert linked file
+($File) = `ls -la $File` =~ /^l.* -> (.*)$/ if -l $File;
+
+# Search through Clearcase history for this file
+open(CTLSH, "cleartool lsh $s $File |") || die;
+while(my $fver= <CTLSH>) {
+	chomp($fver);
+	if ($DefectSearch) {
+		if ($fver =~ /DEFECT_ID:/ && ($Cver!~ /@@\/main\/\d+$/)) {
+			my @d = split(/;/,$fver);
+			next if (scalar @d > 4); # Ignore merges
+			if ($fver =~ /$String/) {
+				print $Fullcreate . " : " . $fver . "\n";
+				push(@deltas, $Cver);
+			}
+			print $fver . "\n" if $Debug;
+		} elsif ($fver =~/create version/) {
+			my @s = split(/\"/,$fver);
+			# --02-04T15:03  jprewitt   create version "/vobs/projects/springboard/fabos/src/sys/route/new/rte_ctrlr.c@@/main/v6.4.0_pit_a/15"
+			$Cver = $s[1];
+			$Fullcreate = $fver;
+			print "($Cver) from $fver\n" if $Debug;
+		}
+		next;
+	}
+
+
+	# String search
+	next unless $fver =~/\/\d+$/;
+	my ($branch,$rev) = get_branch_and_version($fver);
+	next unless $branch;
+	next if $Changed{$branch}; # Already found a change for this branch
+	my $grepstr = "grep -c \"$String\" $fver";
+	my $out = `$grepstr`;
+	chomp($out);
+	if (!defined($Branch{$branch})) {
+		print "first of branch($branch) out=$out fver=$fver\n" if $Debug;
+		$FoundCount{$branch} = $out;
+		$OrigCount = $out unless defined($OrigCount);
+	}
+	elsif ($out != $FoundCount{$branch}) {
+		print "$grepstr: " . $out . "\n" if $Debug;
+		print "vimdiff -R $fver $Branch{$branch}\n";
+		if ($out > $FoundCount{$branch}) {
+			print "Change was added in ver=$Branch{$branch}\n" if $Debug;
+			push(@deltas, $fver);
+		} else {
+			print "Change was removed in ver=$fver}\n" if $Debug;
+			push(@deltas, $Branch{$branch});
+		}
+		$Changed{$branch} = 1;
+	}
+	$Branch{$branch} = $fver;
+	print "$grepstr: " . $out . " " . $Changed{$branch} . "\n" if $Debug;
+}
+close(CTLSH);
+
+print "These branches always had $OrigCount occurrences of \"$String\":\n";
+if ($OrigCount) 
+{
+	#print "These branches always had $OrigCount occurrences of \"$String\":\n" if scalar keys %Branch;
+	foreach $b (keys %Branch) {
+		#print $Branch{$b} . "\n" if $Branch{$b};
+		my ($branch,$rev) = get_branch_and_version($Branch{$b});
+		print $branch . "\n" if (($FoundCount{$b} == $OrigCount) && ($rev == 0));
+	}
+}
+
+do {
+	$first_change = pop(@deltas);
+} while (@deltas && $first_change =~ /\/main\/\d+$/g);
+
+print `cleartool describe $first_change` if $first_change;
+
+
+
+
+
+
+################################################################################
+sub get_branch_and_version() {
+	my $full = shift;
+	my ($fb,$vs) = split(/@@/,$full,2);
+	my @s = split(/\//,$vs);
+	my $revnum = pop(@s);
+	my $branch = join('/',@s);;
+	return ($branch,$revnum);
+}
+

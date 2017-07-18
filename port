@@ -1,0 +1,19 @@
+#!/usr/local/bin/perl
+
+$in = shift;
+
+$in = hex($in) if $in =~ /0x/;
+
+if ($in =~ /\//) {
+   @s = split(/\//,$in);
+   $port = ($s[0] * 0x20) + ($s[1] * 8) + ($s[2]);
+   $lpp = $in;
+} else {
+   $lpp = sprintf "%0d/%0d/%0d", ($in/32),(($in&0x18)>>3),($in&0x7);
+   $port = $in;
+}
+
+$lim = $port/32;
+$spp = ($port&0x10)>>4;
+$p   = ($port&0xF);
+printf "%3d(0x%02x) : %s L:%d S:%d P:%d\n", $port, $port, $lpp, $lim, $spp, $p;

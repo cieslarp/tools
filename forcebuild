@@ -1,0 +1,30 @@
+#!/usr/local/bin/perl
+
+my $tmp = "/tmp/" . time . $$ . ".tmp";
+my $cur = `ls /nfs/sw/tftpboot/release/switch/neos91_ndcla_ref/*.bin`;
+if ($cur =~ /NEOS(\d+)_BLD_(\d+)\.bin/) {
+    $rev = $1;
+    $bld = $2;
+}
+my $forced_rev = shift || $rev;
+my $forced_build = shift || $bld;
+
+my $tag = "NEOS" . $forced_rev . "_BLD_" . $forced_build;
+my @curcs = `ct catcs `;
+if (scalar @curcs) {
+   open(TMP, ">$tmp") || die;
+   for my $line (@curcs) {
+       print TMP $line unless $line =~ /element\s+\/vobs\/sanera\/tools\/version\/sanera_.*\.txt/;
+       if ($line =~ /CHECKEDOUT/) {
+          print TMP "element /vobs/sanera/tools/version/sanera_buildnum.txt $tag\n";
+          print TMP "element /vobs/sanera/tools/version/sanera_rel_num.txt  $tag\n";
+       }
+   }
+   close(TMP);
+   print `ct setcs $tmp`;
+   print `ct catcs`;
+   unlink($tmp);
+}
+else { 
+   print "No Config Spec!\n"; 
+}

@@ -1,0 +1,10 @@
+#!/bin/bash
+for f in $* ; do
+	approved=`cleartool desc -aattr ApprovedBY -short $f | sed -e 's/"//g' `
+	if [[ $approved == "" ]]; then
+		#approve $f
+		gatekeeper -f $f -a
+		approved=`cleartool desc -aattr ApprovedBY -short $f | sed -e 's/"//g' `
+	fi
+	echo $f : $approved
+done

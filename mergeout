@@ -1,0 +1,34 @@
+#!/usr/local/bin/perl
+my $from_branch = shift || "latest";
+my $comments = join(" ",@ARGV);
+my $dry = 1 if $comments =~ /^dry$/i;
+my $Cmd = "-unres -merge -gmerge";
+$Cmd = "-print" if $comments =~ /^print$/i;
+$comments = "Merge from $from_branch" unless length($comments);
+my $view = "";
+if ($from_branch =~ /latest/)
+{
+    $fver = "-flatest";
+}
+else 
+{
+	$from_view = `cleartool lsview -s $from_branch`;
+	chomp($from_view);
+	if ($from_view eq $from_branch) {
+		$fver = "-ftag $from_branch";
+		$view = $from_branch;
+		print "view: ($view)\n";
+	}
+	else {
+		$fver = "-fver .../$from_branch/LATEST"; 
+	}
+}
+
+open STDERR, '>&STDOUT' or die "Can't dup stdout: $!";
+foreach my $file (`/users/home55/pcieslar/bin/out $view`) {
+	chomp($file);
+	my $merge = "cleartool findmerge $file $fver -nback -log /dev/null -c \"$comments\" $Cmd";
+	print  "$merge\n";
+	$out = `$merge` unless $dry;
+	print $out;
+}

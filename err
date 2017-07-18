@@ -1,0 +1,19 @@
+#!/usr/local/bin/perl
+$linecount = 100000;
+while ($line = <STDIN>) {
+   if ($line =~ /:[0-9]+:/) {
+      @f = split(/:/,$line);
+      if (-r $f[0]) {
+         $s = $f[0]." +".$f[1];
+         unless ($printed++) {
+           print STDERR "\n" . "-" x 40 . "\n"; 
+           print $s 
+           $linecount = 30;
+         }
+      }
+   }
+   print STDERR $line if $linecount-- > 0;
+}
+if ($linecount < 0) {
+   print "...:".abs($linecount)."\n";
+}

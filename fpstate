@@ -1,0 +1,1 @@
+rsh ridge expect ~/bin/fpstate.exp $1 $2

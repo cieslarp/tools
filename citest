@@ -1,0 +1,82 @@
+#!/usr/local/bin/perl
+
+$Verbose = 0;
+$Created_f = 0;
+$Opt = "";
+$quiet = "";
+$Difftype = "diff";
+$longest = 0;
+
+foreach $arg (@ARGV)
+{
+   print "(".$arg.")\n" if $Verbose;
+   if ($arg =~ /^-/) {
+      $Difftype = substr($arg,2) if lc($arg) =~ /-d/;
+      $Opt      = substr($arg,1) if lc($arg) =~ /--/;
+      $quiet    = "-q "          if lc($arg) =~ /-q/;
+      $Verbose++                 if lc($arg) =~ /-v$/;
+   }
+   else { push(@files,$arg); }
+}
+
+push(@files,`out`);
+foreach my $file1 (@files) {
+    $longest = length($file1) if length($file1) > $longest;
+}
+
+foreach my $file1 (@files) {
+    chomp($file1);
+    my $file2;
+    my @rels;
+    my $f1rev = get_file_rev($file1);
+    my $f1bev = $f1rev;
+    $f1bev =~ s/\/([0-9]+)$//;
+    my $f1num = $1;
+    unshift(@rels, $f1rev);
+    unshift(@rels, $f1bev."/LATEST");
+
+    $file2 = $file1 . "@@" . $rels[0] if ($rels[0]);
+    $file1 = $file1 . "@@" . $rels[1] if ($rels[1]);
+
+    if ($Verbose) {
+        print "f1rev=($f1rev)\n";
+        print "f1bev=($f1bev)\n";
+        print "f1num=($f1num)\n";
+        print "f1=($file1)\n";
+        print "f2=($file2)\n";
+        print "r0=($rels[0])\n";
+        print "r1=($rels[1])\n";
+    }
+
+    die "File not found: $file1\n" unless $file1;
+    die "No second file\n" unless $file2;
+    die "Second File not found: $file2\n" unless -e $file2;
+
+    $dline = $Difftype." $Opt $file1 "." $file2";
+
+    printf "LATEST vs %" . $longest . "s@@%s\n",split(/@@/,$file1) unless $quiet;
+    #print $dline."\n" unless $quiet;
+    system($dline);
+}
+exit;
+
+
+
+
+
+
+
+########################
+sub get_file_rev() {
+   my $file = shift;
+   my $out = `ct ls $file`;
+   $out =~ /.*@@(.*)Rule:/;
+   my @s = split(/\s+/,$1);
+   if ($s[0] =~ /CHECKEDOUT/ && $s[1] eq "from") {
+       $s[2] =~ s/\s+//g;
+       return $s[2];
+   } else {
+       $s[0] =~ s/\s+//g;
+       return $s[0];
+   }
+}

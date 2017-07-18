@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# ct_lsco_authlist [-r|-all|-avobs] - list check-outs needing authorized gate-keepers
+#
+#   Assumes it is in the view with the check-outs.
+#
+#   Author: Tracy Steelhammer
+
+case "$#" in
+0) lsco_args="-all" ;;
+*) lsco_args="$*"
+esac
+
+tmp_lsco=/tmp/lsco.$$
+cleartool lsco -short -cview $lsco_args > $tmp_lsco
+
+tmp_auth=/tmp/auth.$$
+grep -v '#' /vobs/multisite/sreglobal/gk_authlists/common > $tmp_auth
+
+cat $tmp_lsco |
+while read LINE
+do
+  grep "$LINE" $tmp_auth
+done
+
+# sed -e 's/:.*//' $tmp_auth |
+# while read LINE
+# do
+#   grep "$LINE" $tmp_lsco
+# done
+
+rm -f $tmp_lsco
+rm -f $tmp_auth

@@ -1,0 +1,87 @@
+#!/usr/local/bin/perl
+
+$startdir = ".";
+@files = @ARGV;
+$unlink_ofile = shift;
+
+find_includes($startdir);
+
+sub find_includes() {
+   my $st = shift;
+   opendir(THISDIR,$st);
+   my @files = readdir(THISDIR);
+   closedir(THISDIR);
+   foreach $f (@files) {
+      next if $f =~ /^\.+$/;
+      my $ff = $st."/".$f;
+      if (-d $ff) {
+         find_includes($ff);
+      } elsif ($ff =~ /\.(cpp|h|c)$/) {
+         if (open(SRC, $ff)) {
+            while ($line = <SRC>) {
+               if ($line =~ /^\s*#\s*include/) {
+                  my @a = split(/\"|\<|\>/,$line);
+                  $incby{$a[1]} .= $ff.";";
+                  $incin{$ff} .= $a[1].";";
+               }
+            }
+         }
+      } elsif ($ff =~ /Make/) {
+         if (open(MF,$ff)) {
+            while ($line = <MF>) {
+               if ($line =~ /^\s*SRC\s*=/) {
+                  while ($line =~ /\\$/) { $line .= <MF> }
+                  my ($j,$s) = split(/=/,$line);
+                  my @sf = split(/\s+|\\|\n/,$s);
+                  foreach $s (@sf) { $incby{$s} .= $ff.";" if $s =~ /\.c/; }
+               }
+            }
+         }
+      }
+   }
+}
+
+foreach $file (@files) {
+   if ($file =~ /\.h$/) {
+      print $file." included by:\n";
+      foreach $f (split(/;/,$incby{$file})) {
+         print "   ".$f;
+         if ($unlink_ofile) { 
+            my @os = split(/\//,$f);
+            my $cf = pop(@os);
+            $cf =~ s/\.c(pp)*$/\.o/; 
+            push(@os,"objmips",$cf);
+            my $of = join("/",@os);
+            if (-e $of) {
+               print " : ".$of;
+               unlink($of);
+            }
+         }
+         print "\n";
+      }
+   } elsif ($file =~ /\.c(pp)*$/) {
+      print_files_included_by($file);
+   } else {
+      foreach $k (keys(%incin)) {
+         my @s = split(/\//,$k);
+         my $sf = pop(@s);
+         if ($sf =~ /\.h/) {
+            if ($incby{$sf}) {
+               print $sf." included by:".$incby{$sf}."\n" 
+            } else {
+               print $sf." not included".$incby{$sf}."\n";
+            }
+         }
+      }
+      exit;
+   }
+}
+
+sub print_files_included_by() {
+   my $fn = shift;
+
+   print "files included by: $fn\n";
+   foreach $k (keys(%incby)) {
+      print " ".$incby{$k}." : ".$k."\n" if $k =~ /$file/;
+   }
+}

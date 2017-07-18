@@ -1,0 +1,28 @@
+#!/usr/local/bin/perl
+
+$file = shift;
+$rm_old = shift || 1;
+
+if (open(CFILE,$file)) {
+   # Read the entire file as one string
+   read(CFILE,$program,10000000);
+
+   # Remove /*  */ comments
+   $program =~ s/\/\*.*?\*\///gsxm;
+
+   # Remove #if 0 comments
+   $program =~ s/\#if\s+0.*?\#endif//gsxm;
+}
+
+if (open(BARE,">$file.noc")) {
+   foreach $line (split(/\n/,$program)) {
+      #Remove // comments
+      $line =~ s/\/\/.*//; 
+      print BARE $line."\n" if $line;
+   }
+}
+
+rename($file,$file.".old") || die "$file: rename failed\n";
+rename($file.".noc",$file) || die "$file: rename failed\n";
+unlink($file.".old") if $rm_old;
+

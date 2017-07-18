@@ -1,0 +1,17 @@
+#!/usr/bin/perl
+
+foreach my $arg (@ARGV) {
+    if ($arg =~ /^-/) {
+        push(@Opts,$arg);
+    } elsif (!defined($view)) {
+        $view = $arg;
+    }
+}
+
+unless ($view) {
+	chomp($view = `cleartool pwv -s`);
+}
+
+push(@Opts, "-s") if (scalar @Opts == 0);
+print STDERR $view . ":\n";
+system("cleartool setview -exec \"cleartool lsco -cvi -avob @Opts\" $view");

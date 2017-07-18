@@ -1,0 +1,43 @@
+#!/usr/local/bin/perl
+
+# look for a file named <lim>_<paddle>_<port>.fplog in the current directory
+# or a file named lc<lim>_fplog.tar.gz and extract the fplog file and display it
+# or look in the directory lc<lim> and then for the lc<lim>_fplog_tar.gz and extract the fplog file and display it
+
+my $vsn  = shift;
+my $lpp  = shift;
+my $type = shift;
+
+my ($lim,$pad,$port) = split(/\//,$lpp);
+
+print "vsn=[$vsn] lpp=[$lpp] [$lim][$pad][$port]\n" if $debug;
+my $file = $lim ."_". $pad . "_" . $port . ".fplog";
+my $arch = "lc" . $lim . "_fplog.tar.gz";
+my $lcdir = "lc" . $lim;
+
+disp_file($file) if -e $file;
+
+`tar zxf $arch` if -e $arch;
+disp_file($file) if -e $file;
+
+chdir($lcdir) if -d $lcdir;
+disp_file($file) if -e $file;
+
+`tar zxf $arch` if -e $arch;
+disp_file($file) if -e $file;
+
+
+printf "$file: file not found!\n";
+
+
+sub disp_file() {
+    my $file = shift;
+    if (open(FPL, $file)) {
+        my $line, $printon=0;
+        while ($line = <FPL>) {
+            print $line if $printon;
+            $printon = 1 if $line =~ /Old to new/;
+        }
+    }
+    exit;
+}

@@ -1,0 +1,51 @@
+#!/usr/local/bin/perl
+
+$wordsize = 4;
+$wperline = 4;
+$ascii    = 0;
+
+foreach $arg (@ARGV)
+{
+   print "(".$arg.")\n" if $verbose;
+   if ($arg =~ /^-/) {
+      $wordsize = substr($arg,2) if lc($arg) =~ /-w/;
+      $wperline = substr($arg,2) if lc($arg) =~ /-l/;
+      $ascii++ if lc($arg) =~ /-s$/;
+   }
+   else { push(@files,$arg); }
+}
+
+unless (scalar(@files)) {
+	push(@files,"STDIN");
+}
+
+foreach $f (@files)
+{
+   if (-r $f) {
+      $i=0;
+      $w=0;
+      @ach = ();
+      printf "%08x:", $offset;
+      open(HFILE,$f) || die "$f : $!\n";
+      binmode(HFILE);
+      while (read(HFILE,$c,1)) {
+          printf "%02x",ord($c);
+          push(@ach, printable($c));
+          if (($i % $wordsize) == ($wordsize-1)) { $w++; print " "; }
+          if ($w == $wperline) { $w=0; print @ach; @ach = (); $offset += ($wordsize*$wperline); printf "\n%08x:", $offset; }
+          $i++;
+      }
+      close(HFILE);
+   }
+}
+
+
+sub printable() {
+   my $char = shift;
+   $char = ord($char);
+   if (($char > 31) && ($char < 0x7f)) {
+      return chr($char);
+   }
+   return " ";
+}
+

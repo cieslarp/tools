@@ -1,0 +1,15 @@
+#!/usr/local/bin/perl
+
+my $view = shift;
+print `ct setview -exec out $view`;
+my $bdir = "/view/$view/vobs/os/linux/src/userland/buildrootfs/";
+my $mdir = "/view/$view/vobs/sanera/tools";
+if (! -d $bdir) {
+   die "Could not find $bdir\n"; 
+}
+if (! -d $mdir) {
+   die "Could not find $mdir\n"; 
+}
+
+chdir $bdir;
+system("sudo $mdir/mkrootfs.pl /export/$ENV{user}");

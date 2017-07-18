@@ -1,0 +1,38 @@
+#!/usr/local/bin/perl
+my $f = shift || "/vobs/projects/springboard/fabos/cscope.out";
+$CSD = "/dev/shm/";
+$CSD = `cd $CSD; pwd`;
+$View = `/opt/rational/clearcase/bin/cleartool pwv -s`;
+chomp($CSD);
+chop($View);
+
+die "No Cscope directory ($CSD)\n" unless -d $CSD;
+die "No View ($View)\n" if $View =~ /None/;
+$f = find_best_matching_cscope_db() unless -e $f;
+die "No cscope.out to link! ($f)\n" unless -e $f;
+
+my @l = lstat($f);
+print "$f size = $l[7] (@l)\n" if $debug;
+if ($l[7] > 100000) {
+	if (-d $CSD) {
+		my @s = split(/\//,$f);
+		my $base = pop(@s);
+		my $newfile = "$CSD/$View" . "_" . $base;
+		system("mv $f $newfile");
+		print("ln -s $newfile $f\n") if $debug;
+		system("ln -s $newfile $f");
+		@l = lstat($f);
+		print "$f newsize = $l[7] (@l)\n" if $debug;
+	} else {
+		die "$CSD does not exist\n";
+	}
+}
+
+
+sub find_best_matching_cscope_db() {
+	my $best = "";
+	chdir($CSD);
+	my @out = (<*.out>);
+	print "FIND = (@out)\n";	
+	
+}

@@ -1,0 +1,98 @@
+#!/usr/local/bin/perl
+my $view = shift || `/opt/rational/clearcase/bin/cleartool pwv -s`;
+my $debug = shift;
+
+chomp($view);
+my $Cso = $view . "_cscope.out";
+print STDERR "view = $view\n" if $debug;
+$do_reverse = 1;
+
+#@dirs = ("/dev/shm/", "/tmp/cscope/", "/vobs/projects/springboard/fabos/");
+#@dirs = ("/tmp/cscope/", "/vobs/projects/springboard/fabos/");
+@dirs = ("/dev/shm/", "~/cscope", "/scratch/fos-brm/pcieslar/cscope/", "/vobs/projects/springboard/fabos/");
+
+#For example: /tmp/cscope/pcieslar_v7.1.0_pit_a_01_cscope.out
+@views = split(/_/,$Cso);
+
+$name = shift(@views);
+$end  = pop(@views);
+$vnum = pop(@views);
+
+@types = ($Cso, join("_",$name,@views), join("_",@views,$vnum));
+
+$justv = join("_", @views);
+while (length($justv)) {
+	push(@types, $justv);
+	chop($justv);
+}
+
+
+
+foreach my $cso (@types) {
+	print "type($cso)\n" if $debug;
+	foreach my $dir (@dirs) {
+		next unless -d $dir;
+		chdir $dir;
+		print "dir($dir)\n" if $debug;
+	
+		if (-e $cso) {
+			print $dir . $cso;
+			my $ls = `ls -lh $dir$cso`;
+			chomp($ls);
+			print STDERR "Use existing cscope db: ($ls)\n"; 
+			exit;
+		}
+		my @out = (<*.out>);
+		foreach my $of (@out) {
+			if (-l $of) {
+				my $ls = `ls -lh $of`;
+				my @s = split(/\s+->\s+/,$ls);
+				my $ldir = $s[1];
+				my @ds = split(/\//,$ldir);
+				pop (@ds);
+				my $base = join('/', @ds);
+				if ($dir =~ /$base/) {
+					print "skip linked cscope ($of) to same dir ($base)\n" if $debug;
+					next;
+				}
+
+				print "allow linked cscope ($of) to different dir ($base) vs ($dir)\n" if $debug;
+			}
+			#next if -l $of; # Skip symbolic links
+			print STDERR "of=($of) vs cso($cso) vs Cso($Cso)\n" if $debug;
+			if ($of =~ /$cso/) {
+				#print $dir . $of;
+				print `ln -s $dir$of $dir$Cso`;
+				print STDERR "Linked $dir$of to $dir$Cso\n";
+				print STDERR `ls -lh $dir$Cso` if $debug;
+				print $dir . $Cso;
+				exit;
+			}	
+		}
+	}
+	next;
+	if ($cso =~ /cscope/) {
+		my @s = split(/_/,$cso);
+		pop(@s);
+		pop(@s);
+		$cso = join('_',@s);
+		print STDERR "newcso=$cso\n" if $debug;
+	} elsif ($do_reverse) {
+		my $revcso = reverse($cso);
+		chop($revcso);
+		$cso = reverse($revcso);
+		print STDERR "newcsorch=$cso\n" if $debug;
+		if (length($cso) == 0) {
+			$cso = $view;
+			$do_reverse = 0;
+		}
+	} else {
+		chop($cso);
+		print STDERR "newcsoch=$cso\n" if $debug;
+	}
+}
+
+#if nothing else could be found...
+#print "/dev/shm/" . $Cso;
+print STDERR "No existing cscope db found!\n";
+print "/tmp/cscope/" . $Cso;

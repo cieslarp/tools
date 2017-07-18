@@ -1,0 +1,116 @@
+#!/usr/local/bin/perl
+$oneline = 0;
+
+$bbitdir = $0;
+$bbitdir =~ s/\/\w+$/\//g;
+$RegName = '';
+read_bit_file($bbitdir.".bits");
+
+foreach $a (@ARGV) {
+   my $bitfile = $bbitdir.$a.".bits";
+   if ($a =~ /^-o/) { $oneline = 1; }
+   elsif ($BitDefs{$a}) { push(@ARGV,split(/\s+/,$BitDefs{$a})); $RegName=$a; }
+   elsif (($a =~ /[:=]/ && $a !~ /^0x/) || $num) { push(@bitdefs,$a); }
+   elsif (length($a) > 11) { 
+	   print "long1 a($a)\n";
+	   $a =~ s/0x|\s+|,//g;
+	   print "long3 a($a) 1=($1)\n";
+	   $num .= $a;
+	  }
+   else { $num .= $a }
+}
+$bitmasks = join('~~~',@bitdefs);
+chomp($num);
+
+unless($num) {
+    foreach my $b (keys %BitDefs) {
+        print "$b $BigDefs{$b}\n";
+    }
+    exit;
+}
+
+print "0x".$num." : [".$RegName . "] ";
+$bitpos = 0;
+$num =~ s/^0x//;
+$num =~ s/://g;
+
+foreach $c (reverse split(//,$num)) {
+  unshift @nib, $c;
+  unshift @bits, sprintf("%04b",hex($c));
+  my $hn = hex($c);
+  for $ii (0..3) {
+     my $dig = sprintf("%-2d",($bitpos+$ii));
+     my $op = " ";
+     my $tp = "_";
+     if ($hn & (1<<$ii)) {
+        $op = chop($dig);
+        $tp = $dig;
+     }
+     push @On, (($hn & (1<<$ii)) ? 1 : 0);
+     $onescount += $On[-1];
+     unshift @ones, $tp;
+     unshift @tens, $op;
+  }
+  unshift @ones, " ";
+  unshift @tens, " ";
+  $bitpos += 4;
+}
+
+shift @ones;
+shift @tens;
+
+unless ($oneline) {
+   print " on=" . $onescount."\n";
+   printf "%4s " x @nib . "\n",@nib;
+   printf "%04d " x @bits . "\n",@bits;
+   print @ones;
+   print "\n";
+   print @tens;
+   print "\n";
+}
+
+if ($bitmasks) {
+   foreach my $field (split(/~~~/,$bitmasks)) {
+      my $value = 0;
+      my $name = "";
+      my @enum = ();
+      my $bit = 0;
+      ($name,$field,$enu) = split(/=/,$field) if $field =~ /=/;
+      @onehotenum  = split(/\./,$enu);
+      @valueenum   = split(/\,/,$enu);
+      printf "%40s%6s ->",$name,$field unless $oneline;
+      if ($field =~ /:/) {
+         my ($low, $high) = split(/:/,$field);
+         ($low,$high) = ($high,$low) if $low > $high;
+         my $idx = 0;
+         for $ii ($low..$high) {
+            $value += ($On[$ii] * (1<<$idx));
+            $bit = $idx if $On[$ii];
+            $idx++;
+         }
+      } else {
+         $value = $On[$field];
+      }
+      if ($oneline) {
+         print $name."=".$value." ";
+      } else {
+         printf "%12d 0x%08x %s\n",$value,$value, ($enu =~ /\./) ? $onehotenum[$bit] : $valueenum[$value];
+      }
+   }
+}
+
+
+sub read_bit_file() {
+   my $bitfile = shift;
+   if (open(BF,$bitfile)) {
+      chomp(my @lines = <BF>);
+      close(BF);
+      foreach $l (@lines) {
+         if ($l =~ /::/) {
+            my ($regname,$defs) = split(/::/,$l);
+            $BitDefs{$regname} = $defs;
+         }
+      }
+   }
+}
+

@@ -1,0 +1,56 @@
+#!/usr/local/bin/perl
+$Filter = shift || ".";
+$Comment = shift || "";
+$Comment = ("_" . $Comment) unless (length($Comment) == 0) || ($Comment =~ /^_/);
+$BackupDir = shift || "$ENV{HOME}/backup";
+use POSIX qw(strftime);
+$now_string = strftime "%d%b%Y_%H%M%S", localtime;
+$opt = $Filter;
+$opt =~ s/\W+//g;
+$opt = "_" . $opt if length($opt);
+
+if (`ct lsview -s $Filter 2>&1` !~ /Error/) {
+	backup_view($Filter); # Just backup this view
+} else {
+	foreach my $view (`ct lsview -s -me`) {
+		chomp($view);
+		next unless $view =~ /$Filter/;
+		backup_view($view);
+	}
+}
+
+mkdir $BackupDir unless -d $BackupDir;
+die "$!: $BackupDir\n" unless -d $BackupDir;
+
+if (scalar @colist) {
+	my $lsfile = "/tmp/lsco_$now_string.txt";
+	if (open(CTLS, ">$lsfile")) {
+		push(@colist, $lsfile);
+		print CTLS @lslist;
+		print CTLS `vdout -p -r`;
+		close(CTLS);
+	}
+    $tarfile = $BackupDir . "/" . $now_string . $opt . $Comment . ".tgz";
+	print `tar zcvf $BackupDir/$now_string$opt$Comment.tgz @colist`;
+    print "Saved to tarfile: $tarfile\n";
+	unlink($lsfile);
+}
+
+sub backup_view() {
+	my $view = shift;
+    print "$view\n";
+    foreach my $co (`ct setview -exe out $view`) {
+        chomp($co);
+        my $element = "/view/" . $view . $co;
+        if (-d $element) {
+            print "   $co(dir skipped)\n";
+        } elsif (-e $element) {
+            push(@colist, $element);
+			push(@lslist, `ct ls $element`);
+            print "   $co\n";
+        } else {
+            print "   $co(unknown file not added)\n";
+        }
+
+    }
+}

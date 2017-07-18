@@ -1,0 +1,14 @@
+#!/usr/local/bin/perl
+
+foreach my $file (`cleartool lsco -avob -s -cview`) {
+	chomp($file);
+	my @s = split(/\//,$file);
+	my $f = pop(@s);
+	my $base = join("\/", @s);
+	#print("file($file) b($base) f($f)\n");
+	$Bases{$base}++;
+}
+
+foreach my $b (sort keys %Bases) {
+	print $b . "\n";
+}

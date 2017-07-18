@@ -1,0 +1,9 @@
+#!/usr/local/bin/perl
+
+foreach my $v (`ct lsview -me`) {
+	chomp($v);
+	my @s = split(/\s+/,$v);
+    print `du.pl -0 $s[2]`;
+}
+
+system("du.pl -1 /zzz/work05/pcieslar/dyn_view_rstg");

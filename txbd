@@ -1,0 +1,24 @@
+#!/usr/local/bin/perl
+
+#See 15.6.4 TXQ Status Table (PR Codes / Reason Codes) Table 8-140
+
+my $chip = shift || "C4";
+my $filter = shift || ".";
+
+if ($chip =~ /2/) {
+	$file = "/vobs/projects/springboard/fabos/src/sys/include/asic/c2_reg.h";
+} elsif ($chip =~ /3/) {
+	$file = "/vobs/projects/springboard/fabos/src/sys/include/asic/c3_reg.h";
+} elsif ($chip =~ /ge4/) {
+	$file = "/vobs/projects/springboard/fabos/src/sys/include/asic/geye4_reg.h";
+} elsif ($chip =~ /4/) {
+	$file = "/vobs/projects/springboard/fabos/src/sys/include/asic/c4_reg.h";
+} else {
+	$file = "/vobs/projects/springboard/fabos/src/sys/include/asic/condor_reg.h";
+}
+
+@bd = `grep TXBD_ $file`;
+
+foreach my $j (@bd) {
+	print $j if ($j =~ /$filter/);
+}

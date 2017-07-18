@@ -1,0 +1,286 @@
+#!/usr/local/bin/perl
+
+# Decode the output of the sloterrshow command to map to real ports
+#Asic CONDOR2 (1/1/0), Port Group(1/0): FC,  Poll# 0.
+#er_c3_timeout       [24]       0       0       0       0       0       0      55      56
+$Switch = "";
+$ExFilter = 0;
+$Filter = 0;
+$debug = 0;
+$Date="";
+$longest = 1;
+@Files = ();
+$opt = "-r -c2";
+$polltime = "-p1";
+$no_ctrl_stats = 1;
+$CtrlString = "buf\|bbc\|rdy";
+$CSV = 0;
+
+foreach my $arg (@ARGV) {
+	if ($Filter eq "GetNextArg") {
+		printf "Filter = [%s]\n", $arg;
+		$Filter = $arg;
+		next;
+	}
+	if ($ExFilter eq "GetNextArg") {
+		printf "Exclusive Filter = [%s]\n", $arg;
+		$ExFilter = $arg;
+		next;
+	}
+	push (@Files, $arg) if $arg =~ /\d+\.\d+\.\d+\.\d+/;
+	push (@Files, $arg) if -e $arg;
+	$CSV++ if $arg =~ /^-c/;
+	$opt = "-r -c2" if $arg =~ /^-r/;
+	$opt = "-c1" if $arg =~ /^-a/;
+	$polltime = $arg if $arg =~ /^-p\d+/;
+	$debug = substr($arg,2) if $arg =~ /^-d/;
+	$ExFilter = "GetNextArg" if $arg =~ /^-v$/;
+	$Filter = "GetNextArg" if $arg =~ /^-g$/;
+	$no_ctrl_stats ^= 1 if $arg =~ /^-u/;
+}
+
+push(@Files, STDIN) if scalar $Files < 0;
+
+foreach my $file (@Files) {
+	if ($file =~ /\d+\.\d+\.\d+\.\d+/) {
+		my $slotcmd = ($file =~ s/err//g || $0 =~ /err/) ? "sloterrshow" : "slotstatsshow";
+		print "SSH to $file with $slotcmd $opt $polltime\n";
+		open(FILE, "switchssh $file '$slotcmd -u $opt $polltime' | ") || die "$!\n";
+		$f = FILE;
+	} elsif (-e $file) {
+		print "Reading file: $file\n";
+		my $ofile = $file;
+		if ($file =~ /gz$/) {
+			$ofile = "zcat $file |";
+		}
+		open(FILE, $ofile) || die "$!\n";
+		$f = FILE;
+		$opt = "-c1";
+	} else {
+		print "Reading from STDIN...\n";
+		open(FILE, STDIN) || die "$!\n";
+		$f = "";
+	}
+
+	$Switch = $file;
+
+	while (my $line = <$f>) {
+		print "SSD:" . $line if ($debug > 2);
+		chomp($line);
+		if ($line =~ /Poll cycle (\d+)/) {
+			$poll = $1;
+			$in_stats = 1;
+		}
+		if ($line =~ /^bladeportmap\s+(\d+)/) {
+			$in_bladeportmap = "S" . $1;
+		}
+		if ($in_bladeportmap) {
+			save_bladeportmap(substr($in_bladeportmap,1),$line,$Switch);
+		}
+		if ($line =~ /^real/) {
+			$in_bladeportmap = "";
+			$in_stats = "";
+		}
+		next if ($poll > 0) && ($opt =~ /-c1/);
+		next unless $in_stats;
+		next unless $poll > 0 || $opt =~ /c1/;
+		next if $line =~ /max_ctrs/;
+		next if $ExFilter && $line =~ /$ExFilter/;
+
+		if ($line =~ /^(\d{2}\w{3}\d{2}_\d{2}:\d{2}:\d{2}) (\d+\.\d+\.\d+.\d+):/) {
+			$Date = $1;
+			$Switch = $2 . ":";
+			my @s = split(/ /,$line,3);
+			$line = $s[2];
+			print "date($Date) ip($Switch) line($line)\n";
+		}
+
+		# Save off the slot and chip 
+		if ($line =~ /^Asic \w+ \((\d+)\/(\d+)\//) {
+			$Slot{$Switch} = $1;
+			$Chip{$Switch} = $2;
+		}
+
+		my ($stat_name, $port_base, $stat_str) = split(/\[|\]/, $line);
+		$stat_name =~ s/\s+$//g;
+
+		$stat_str =~ s/^\s+//g; # Remove leading spaces
+		my @s = split(/\s+/, $stat_str);
+
+		printf "sw[%s] s[%d] c[%d] poll[%d] n[$stat_name] b($port_base) s[$stat_str](@s)\n", $Switch, $Slot{$Switch}, $Chip{$Switch}, $poll, if $debug > 1;
+
+		# Expext 10 columns starting with stat name, [port base] and 8 columns of stat numbers
+		if (length($stat_name) > 0 && length($port_base) > 0 && scalar @s >= 8) {
+			my @ps = ();
+			for my $i (0..7) {
+				next if ($no_ctrl_stats && $stat_name =~ /$CtrlString/);
+				if ($Filter) { next unless $line =~ /$Filter/; }
+				if ($s[$i]) {
+					$ps[$i] = ($port_base + $i) . "=" . $s[$i] . ",";
+					printf "Non zero stat for port[%s] (%d + %d)\n", $ps[$i], $port_base, $i if $debug > 2;
+					my $scp = "$Switch\t$Slot{$Switch}/$Chip{$Switch}/" . ($port_base+$i);
+					$PortsWithStat{$stat_name}++;
+					my $val = $s[$i];
+					$val =~ s/m$/e6/;
+					$val =~ s/k$/e3/;
+					$val = eval($val);
+					print "scp[$scp]  $stat_name = $val\n" if $debug;
+					${$stat_name}{$scp} = $val;
+					${$stat_name}{"$Switch$Slot{$Switch}/$Chip{$Switch}/T"} += $val;
+					$AllPorts{$scp}++;
+					#$longest = length($stat_name) if length($stat_name) > $longest;
+					my @ns = split(/_/,$stat_name);
+					$longest = scalar @ns if scalar @ns > $longest;
+				}
+			}
+			printf("%d,%d,%s,%d," . ("%s" x 8) . "\n", $Slot{$Switch}, $Chip{$Switch}, $stat_name, $port_base, @ps) if $debug;
+		}
+	}
+}
+
+if ($CSV) {
+	print_csv();
+} else {
+	print_results();
+}
+
+################################################################################
+sub print_results() {
+	my @Snames = sort keys %PortsWithStat;
+	for my $stat (@Snames) {
+		printf("%s=%d\n", $stat, $PortsWithStat{$stat}) if $debug;
+	}
+
+	# Print Header
+	my $ni = 0;
+	do {
+		print "\n" if ($ni > 0);
+		if ($ni == $longest) {
+		   	printf "%-20s %10s %13s= ", "-" x 20, "-" x 10, "-" x 13; }
+		elsif ($ni == ($longest-1)) {
+			printf "%-20s %10s %13s= ", "Switch", "(S/C/P)", "Port Desc";
+		} else { printf "%47s", " "; }
+
+		foreach my $j (@Snames) {
+			#		printf "%10s ", substr($j,10,20);
+			my @ns = split(/_/,$j);
+			printf "%10s ", (length($ns[$ni]) == 0 && $ni == $longest) ? ("-" x 10) : $ns[$ni];
+		}
+	} while ($ni++ < $longest);
+	printf "\n";
+
+	# Print filename, slot/chip/port, port desc, stats
+	for my $i (sort by_scp keys %AllPorts) {
+		my ($sw, $scp) = split(/\t/,$i,2);
+		print "i($i) sw($sw) scp($scp)\n" if $debug > 1;
+		$sw =~ s/\w+@//g if $sw =~ /@/;
+		printf "%-20s %10s %13s= ", substr($sw,0,20), $scp, get_port_desc($i);
+		foreach my $j (@Snames) {
+			printf "%10d ", ${$j}{$i};
+			$Total{$j} += ${$j}{$i};
+			printf "(Tot=$Total{$j}) " if $debug > 1;
+		}
+		printf "\n";
+	}
+
+	print "Total" . (" " x 42);
+	foreach my $j (@Snames) {
+		printf "%10d ", $Total{$j};
+	}
+	printf "\n";
+}
+
+################################################################################
+sub print_csv() {
+	my @Snames = sort keys %PortsWithStat;
+
+	# Print Header
+	printf "%-20s,%10s,%13s,", "Switch", "(S/C/P)", "Port Desc";
+	for my $stat (@Snames) {
+		printf "%s,", $stat;
+	}
+	print "\n";
+
+	# Print filename, slot/chip/port, port desc, stats
+	for my $i (sort by_scp keys %AllPorts) {
+		my ($sw, $scp) = split(/\t/,$i,2);
+		printf "%-20s,%10s,%13s,", $sw, $scp, get_port_desc($i);
+		foreach my $j (@Snames) {
+			printf "%10d,", ${$j}{$i};
+			$Total{$j} += ${$j}{$i};
+		}
+		printf "\n";
+	}
+
+	print "Total,,," . (" " x 42);
+	foreach my $j (@Snames) {
+		printf "%10d,", $Total{$j};
+	}
+	printf "\n";
+}
+
+
+
+################################################################################
+sub by_scp() {
+	my $ad = get_port_desc($a);
+	my $bd = get_port_desc($b);
+	if ($ad && $bd) {
+		return ($ad <=> $bd);
+	}
+	my @as = split(/\//,$a);
+	my @bs = split(/\//,$b);
+	1 while $as[0] =~ s/\W+//g;
+	1 while $bs[0] =~ s/\W+//g;
+	return (
+		($as[0] <=> $bs[0]) ||
+		($as[1] <=> $bs[1]) ||
+		($as[2] <=> $bs[2]) ||
+		($as[3] <=> $bs[3])
+	);
+			
+}
+
+sub get_port_desc() {
+	# could be from supportsave file or get it from bladeportmap
+	my $sscp = shift;
+	my ($sw,$scp) = split(/\t/,$sscp);
+	my ($slot,@j) = split(/\//,$scp);
+	unless (defined $Bladeportmap{$sscp}) {
+		if ($sw =~ /\d+\.\d+\.\d+\.\d+/) {
+			get_bladeportmap($sw, $slot);
+		}
+	}
+	if (defined $Bladeportmap{$sscp}) {
+		my @s = split(/\s+/, $Bladeportmap{$sscp});
+		if ($s[2] eq "-1") {
+			return "BE ->" . $s[-1];
+		} else {
+			return $s[2] . " ($slot/$s[3])";
+		}
+	}
+}
+
+sub get_bladeportmap() {
+	my $ip = shift;
+	my $slot = shift;
+	printf "Get bladeportmap %d on %s\n", $slot, $ip if $debug;
+	my @out = `switchssh $ip 'bladeportmap $slot'`;
+	foreach my $line (@out) {
+		save_bladeportmap($slot,$line,$ip);
+	}
+}
+
+sub save_bladeportmap() {
+	my $slot = shift;
+	my $line = shift;
+	my $desc = shift;
+
+	chomp($line);
+	if ($line =~ /^DIS|^ENB/) {
+		my @s = split(/\s+/,$line);
+		my $sscp = $desc . "\t" . $slot . "/" . $s[9] . "/" . $s[5];
+		print "BPM $sscp [$line]\n" if $debug > 2;
+		$Bladeportmap{$sscp} = $line;
+	}
+}

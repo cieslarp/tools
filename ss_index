@@ -1,0 +1,60 @@
+#!/usr/bin/perl -w
+
+no warnings 'uninitialized';
+
+use strict;
+
+my %categories;
+my $header;
+
+my $keyword = shift;
+
+
+my $first;
+my $match=0;
+my $last_match = -1;
+while (<STDIN>)
+{
+	if ( /(.*)\s+:$/ ) {
+		$header = $1;
+		chomp $header;
+		$header =~ s/^\s+//;
+		$header =~ s/\s+$//;
+		$last_match = -1;
+
+		if ($header =~ /$keyword/) {
+				$match++; $last_match = $match;
+				print "\n[" . $header . "]\n\n";
+		}
+
+		@{$categories{$header}} = ();
+		$first = 1;
+		next;
+	}
+	if ($match == $last_match) { print $_; }
+	if ($first) {push @{$categories{$header}}, $_;}
+}
+
+#if ($keyword) {
+#	my $choice=1;
+#	foreach (keys %categories)
+#	{
+#		chomp;
+#		if ($_ =~ /$keyword/) {
+#				$match++;
+#				print $choice . ") " . $_ . "\n";
+#				foreach my $list (@{$categories{$_}}) {
+#					print $list;
+#				}
+#		}
+#		$choice++;
+#	}
+#}
+
+if ($match == 0) {
+	foreach (sort keys %categories) {
+		chomp;
+		print "[" . $_ . "]\n";
+
+	}
+}

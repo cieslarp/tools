@@ -1,0 +1,221 @@
+#!/usr/bin/perl
+$SIG{QUIT} = $SIG{INT} = $SIG{HUP} = \&do_exit;
+$ICase = "";
+$MaxKids = 4;
+$Wild = 0;
+$OnlyFilenames = ($0 =~ /isf/);
+$BeforAfter = "";
+$SaveDir = (-e $ENV{ALLFILES_DIR}) ? $ENV{ALLFILES_DIR} : "/tmp";
+$checked = 0;
+$Prefix = "";
+
+chomp($View = `/usr/atria/bin/cleartool pwv -s`);
+foreach $arg (@ARGV) {
+    if ($arg =~ /^-/) {
+		$Prefix = $1 if $arg =~ /-p(.+)$/;
+        if ($arg =~/-i/) { $ICase = "-i"; }
+        $FileToSearch = substr($arg,2) if $arg =~ /-f/;
+        $Verbose++ if $arg =~ /-d/;
+        $MaxKids = substr($arg,2) if $arg =~ /-m/;
+        $Wild++ if $arg =~ /-w/;
+		$OnlyFilenames++ if $arg =~ /-F/;
+		$View = substr($arg,2) if $arg =~ /-v\w+/;
+		$BefAfter .= " -B$1 " if $arg =~ /-B(\d+)/;
+		$BefAfter .= " -A$1 " if $arg =~ /-A(\d+)/;
+    }
+    elsif (-d $arg) {
+        print STDERR "Adding dir $arg\n" if $Verbose;
+        push(@Dirs,$arg);
+    }
+    else {
+        $Pattern .= " " if length($Pattern);
+        $Pattern .= $arg;
+    }
+}
+push(@Dirs, $SaveDir) unless scalar @Dirs;;
+
+die "Usage $0 <Pattern>\n" unless length $Pattern;
+
+if ($Wild) {
+    @ByDot = split(/\./,$Pattern);
+    foreach my $dp (@ByDot) {
+        $dp =~ s/\W+//g;
+    }
+    $Filtered = join(".",@ByDot);
+} else {
+    $Filtered = $Pattern;
+    $Filtered =~ s/\\s[\+|\*]*//g; # get rid of escaped chars
+    $Filtered =~ s/\W+//g;
+}
+$Filtered = lc($Filtered); # if $ICase eq "-i";
+print STDERR "Pattern=[$Pattern] Filtered=[$Filtered] $ICase\n" if $Verbose;
+$|=1;
+
+foreach $StartDir (@Dirs) {
+    print STDERR "$StartDir/$View.files" if $Verbose;
+    next unless -e "$StartDir/$View.files";
+
+    $checked++;
+    check_for_pat($StartDir);
+}
+
+if ($checked == 0) {
+	print STDERR "No search files found for view:$View\n";
+}
+
+while (my $k = check_kids()) {
+    print STDERR "$$ wait for $k kids\n" if $Verbose > 2;
+}
+print STDERR "$$ all done\n" if $Verbose;
+exit;
+
+
+
+
+
+
+
+
+#################################################
+sub check_for_pat() {
+    my $dir = shift;
+    print STDERR "open ($dir/$View.files)" if $Verbose;
+    open(HF,"$dir/$View.files") || die;
+    chomp (@filenames = <HF>);
+	if ($OnlyFilenames) {
+		printf STDERR "Files = %d\n", scalar @filenames if $Verbose;
+		foreach my $f (@filenames) {
+			my $ff = $f;
+			$ff =~ s/\W+//g;
+			if ($ff =~ /$Filtered/i) {
+				if ($ICase eq "-i") {
+					print $f. "\n";
+				} else {
+					printf STDERR "p=$Pattern f=$f pf=%d fp=%d\n", index($Pattern,$f), index($f, $Pattern) if $Verbose;
+					if (index($f,$Pattern) >= 0) {
+						print $f. "\n";
+					}
+				}
+			}
+		}
+		return;
+	}
+    close(HF);
+    print STDERR ".\n" if $Verbose;
+    my $Wild = $Filtered =~ /\./;
+
+    open(T4F,"$dir/$View.t4f") || die;
+    print STDERR "Search ($dir/$View.tokens): for ($Pattern) F($Filtered)\n" if $Verbose;
+	my $mfile = glob("$dir/$View.tokens*");
+	my $gtype = ($mfile =~ /gz$/) ? "zgrep" : "grep";
+	my @pats = split(/\W+/,lc($Pattern));
+	my $numpat = scalar @pats;
+	my $patindex = 0;
+	my $patmask = 0;
+	foreach my $pat (@pats) {
+		my $matcher = "$gtype --mmap " . (($ICase) ? "-i " : "") . " $pat $mfile | ";
+		print STDERR "matcher=[$matcher] mfile=[$mfile] gtype=[$gtype] pat[$pat]\n" if $Verbose;
+		open(MATCHED, $matcher) || die;
+		while (chomp(my $token = <MATCHED>)) {
+			$token = lc($token) if $ICase;
+			my ($fseek,$tokenstr) = split(/:/,$token,2);
+			if ($Wild) {
+				next unless $token =~ /$pat/;
+			} 
+			else {
+				next unless (index($token,$pat) >= 0);
+			}
+			if ($patindex >= 1) {
+				next unless $tokenstr =~ /^$pat/;
+			}
+			if (($numpat-$patindex) > 1) {
+				next unless $tokenstr =~ /$pat$/;
+			}
+
+			seek(T4F,$fseek,SEEK_SET);
+			my $FIDs = <T4F>;
+			chomp($FIDs);
+			printf "PAT[$pat] token[$fseek][$tokenstr] #FIDS[%5d]\n",length($FIDs) if $Verbose;
+			foreach my $fid (split(/,/,$FIDs)) {
+				$FSeeks{$fid} |= (1<<$patindex);
+				printf "fid[$fid] for pat[$pat] FSeeks=%d\n", $FSeeks{$fid} if $Verbose > 1;
+			}
+		}
+		$patmask |= (1<<$patindex);
+		++$patindex;
+	}
+	printf STDERR "numpat[$numpat] FSeeks[%d]\n", scalar keys %FSeeks if $Verbose;
+
+	foreach my $fid (keys %FSeeks) {
+		printf "fs[$fid]=" . $FSeeks{$fid} . " vs patmask[$patmask]\n" if $Verbose > 1;
+		next unless $FSeeks{$fid} == $patmask;
+
+        foreach my $mf (split(/,/,$fid))
+        {
+            next if $Searched{$mf};
+            print STDERR "check: $mf<" . $filenames[$mf] . "> for '$Pattern'\n" if $Verbose;
+            if (!defined($kidpid = fork())) { die "cannot fork: $!"; } 
+            elsif ($kidpid == 0) {
+               # This is the Child
+			   if ($FileToSearch) {
+			      print $filenames[$mf] . "\n";
+			      exit;
+			   }
+			   print STDERR $$ . ": grep $ICase $BefAfter --mmap -H -n -P '$Pattern' $filenames[$mf] | sed \"s/:/+/\" \n" if $Verbose;
+			   #system("grep $ICase $BefAfter --mmap -H -n -P '$Pattern' $filenames[$mf] | sed \"s/:/_/\" ");
+
+			   my @out = `grep $ICase $BefAfter --mmap -H -n -P '$Pattern' $filenames[$mf]`;
+               print STDERR $$ . ": grep done, size=" . scalar @out . "\n" if $Verbose > 2;
+			   open(PLOCK, ">>/tmp/is.lock") || die;
+			   flock(PLOCK, 2); # LOCK_EX
+			   foreach my $line (@out) {
+				   $line =~ s/:/+/;
+				   print $Prefix;
+				   if ($Verbose) {
+					   print "{$$}:$line";
+				   } else {
+					   print $line;
+				   }
+			   }
+			   flock(PLOCK, 8); # LOCK_UN
+			   close(PLOCK);
+               print STDERR $$ . ": print done, size=" . scalar @out . "\n" if $Verbose > 2;
+               exit;
+            } else { 
+               # This is the Parent
+               print STDERR "$$ Add $kidpid to Kids\n" if $Verbose > 2;
+               $Kids{$kidpid}++;
+               if (scalar keys %Kids >= $MaxKids) {
+                   check_kids();
+               }
+            }  
+            $Searched{$mf}++;
+        }
+    }
+}
+
+sub check_kids()
+{
+    my @skids = sort {$a<=>$b} keys %Kids;
+    foreach my $kid (@skids) {
+        print STDERR "check_kids[" . scalar @skids . "]: $kid= waitpid\n" if $Verbose > 2;
+        my $status = waitpid($kid,1); #NOHANG
+        print STDERR "check_kids[" . scalar @skids . "]: $kid= $status\n" if $Verbose > 2;
+        if ($status < 0) {
+			print STDERR "check_kids: delete $kid\n" if $Verbose > 2;
+            delete $Kids{$kid};
+        }
+    }
+    if (scalar keys %Kids >= $MaxKids) {
+        print STDERR "check_kids: need to wait for a kid (max=$MaxKids)\n" if $Verbose > 2;
+        my $donekid = wait();
+        print STDERR "check_kids: waited for:$donkid, delete.\n" if $Vebose > 2;
+        delete $Kids{$donekid};
+    }
+    return scalar keys %Kids;
+}
+
+sub do_exit() {
+	exit if $Verbose;
+	$Verbose++;
+}

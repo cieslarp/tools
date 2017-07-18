@@ -1,0 +1,39 @@
+#!/usr/local/bin/perl
+$Start = 0.0;
+$StripFront = 1;
+if (scalar @ARGV) {
+	my $Relative = shift @ARGV;
+	if ($Relative =~ /(\d{2}:\d{2}:\d{2}\.\d+)/) {
+		$Start = $1;
+		$Start =~ s/://g;
+		printf "Start($Start) f(%6.2f)\n", $Start;
+	}
+}
+
+while (my $line = <>) {
+	chomp($line);
+	if ($line =~ /(\d{2}:\d{2}:\d{2}\.\d+)/) {
+		$ts = $1;
+		$ts =~ s/://g;
+		push(@output, sprintf "%-6.6f\t$line\n",($ts-$Start));
+	} elsif ($line =~ /(\d{4})\/(\d{2})\/(\d{2})-(\d+):(\d+):(\d+)(.*),\s+/ ) { #RASLOG 2011/01/10-13:28:32, [SPM-5001] ...
+		my $ds = sprintf("%d%02d%02d", $1, $2, $3);
+		my $ts = sprintf("%d%02d%02d", $4, $5, $6);
+		my $ms = $7;
+		($ms) = ($ms =~ /:(\d+),/);
+		$Count{$ds.$ts.$ms}++;
+		#push(@output, "ds[$ds] ts[$ts] ms[$ms] c[$Count{$ds.$ts.$ms}] line[$line]\n");
+		push(@output, "$ds$ts.$ms" . $Count{$ds.$ts.$ms} . "\t$line\n");
+	} else {
+		print $line . "\n";
+	}
+
+}
+#print sort {substr($a, 0, 15) <=> substr($b, 0, 15)} @output;
+my @sortedlist  = sort {$a <=> $b} @output;
+foreach my $entry (@sortedlist) {
+	if ($StripFront) {
+		($ts,$trace) = split(/\t/,$entry,2);
+	} else { $trace = $entry }
+	print $trace;
+}

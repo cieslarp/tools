@@ -1,0 +1,45 @@
+#!/usr/local/bin/perl
+
+# Decode the output of the sloterrshow command to map to real ports
+#Asic CONDOR2 (1/1/0), Port Group(1/0): FC,  Poll# 0.
+#er_c3_timeout       [24]       0       0       0       0       0       0      55      56
+$debug = 0;
+$Date="";
+$Switch="";
+while (my $line = <>) {
+	chomp($line);
+	if ($line =~ /^(\d{2}\w{3}\d{2}_\d{2}:\d{2}:\d{2}) (\d+\.\d+\.\d+.\d+):/) {
+		$Date = $1;
+		$Switch = $2 . ":";
+		my @s = split(/ /,$line,3);
+		$line = $s[2];
+		print "date($Date) ip($Switch) line($line)\n";
+	}
+	if ($line =~ /^Asic \w+ \((\d+)\/(\d+)\//) {
+		$Slot{$Switch} = $1;
+		$Chip{$Switch} = $2;
+	}
+	my @s = split(/\s+/, $line);
+	if (scalar @s == 10) {
+		$s[1] =~ s/\[|\]//g;
+		my @ps = ();
+		for my $i (0..7) {
+			if ($s[$i+2]) {
+				$ps[$i] = ($s[1] + $i) . "=" . $s[$i+2] . ",";
+				my $scp = "$Switch$Slot{$Switch}/$Chip{$Switch}/" . ($s[1]+$i);
+				$PortsWithStat{$s[0]}++;
+				${$s[0]}{$scp} = $s[$i+2];
+				${$s[0]}{"$Switch$Slot{$Switch}/$Chip{$Switch}/T"} += $s[$i+2];
+			}
+		}
+		printf("%d,%d,%s,%d," . ("%s" x 8) . "\n", $Slot{$Switch}, $Chip{$Switch}, $s[0], $s[1], @ps) if $debug;
+	}
+	printf "%s,%d,%d,$line", $Switch, $Slot{$Switch}, $Chip{$Switch} if $debug;
+}
+
+for my $stat (keys %PortsWithStat) {
+	printf("%s=%d\n", $stat, $PortsWithStat{$stat});
+	for my $i (sort {${$stat}{$a} <=> ${$stat}{$b}} keys %$stat) {
+		printf "%22s = rx=%-10s tx=%s\n", $i, $er_c3_timeout{$i}, $sts_tx_timeout{$i};
+	}
+}

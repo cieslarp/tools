@@ -1,0 +1,99 @@
+#!/usr/local/bin/perl
+$debug = 1;
+foreach my $f (@ARGV) {
+   if    ($f =~ /^-v/)       { $debug++; }
+   elsif ($f =~ /\.c(pp)*$/) { push(@files,$f); } 
+   elsif ($f =~ /^-o/) { } 
+   elsif ($f =~ /\.o$/) { } 
+   else  {$comp .= " ".$f; }
+}
+$obj = "inctest.o";
+$comp = "gcc" unless $comp;
+$comp .= " -o $obj";
+$comp =~ s/I\./I..\/./g;
+print "comp=[$comp]\n";
+foreach my $file (@files) {
+   check_includes($file);
+}
+
+foreach my $c (@ci) {
+   print $c;
+}
+
+
+
+sub check_includes() {
+   my $f = shift;
+   if (-d "hdrstub") {
+      system("rm -fr hdrstub");
+   }
+   mkdir("hdrstub");
+   my @s = split(/\//,$f);
+   my $fbase = pop(@s);
+   my $cp_of_f = "hdrstub/".$fbase;
+   $base = pop(@s);
+   system("cp $f $cp_of_f");
+   chdir("hdrstub");
+   @notneeded = ();
+   files_included_by($fbase,0);
+   if ($#notneeded >= 0) {
+      print "-" x 10 . "\n$f does not need:\n";
+      chdir("..");
+      #system("ct co -nc $f");
+      open(NF,">$f.extra") || die;
+      open(OF,$f) || die;
+      foreach my $line (<OF>) {
+         my $found_extra_inc = "";
+         foreach $nn (@notneeded) {
+            if ($line =~ /^\s*#\s*include.*$nn/) {
+               $found_extra_inc = "//";
+               print "   ".$nn."\n";
+               last;
+            }
+         }
+         print NF $found_extra_inc.$line;
+      }
+      close(NF);
+      close(OF);
+      system("cp $f $f.keepinc");
+      system("cp $f.extra $f");
+      #push(@ci,"ct ci -c \"Remove extra #includes\" $f\n");
+   }
+}
+
+sub files_included_by() {
+   my $fn = shift;
+   if (open(FILE, $fn) ) {
+      my @fl = <FILE>;
+      close(FILE);
+      build($fn) || die "could not build $fn as is\n";
+      print "$fn\n" if $debug;
+      foreach my $line (@fl) {
+         if ($line =~ /^\s*#\s*include/) {
+            my @a = split(/\"|\<|\>/,$line);
+            my $hs = $a[1];
+            next if -e $hs;
+            open(STUB_HDR,">$hs") || next;
+            close(STUB_HDR);
+            print " " . $a[1] . " : " if $debug;
+            if ($ret = build($fn)) {
+               print "$ret" if $debug;
+               files_included_by($fn);
+               push(@notneeded, $a[1]);
+            } else {
+               print "needed\n" if $debug;
+               unlink($hs);
+            }
+         }
+      }
+      build($fn) || die "could not build $fn after stubs\n";
+   } else { print " $fn: not found\n" if $debug; return; }
+}
+
+sub build() {
+   my $file = shift;
+   unlink($obj);
+   die if -e $obj;
+   my $output =  `$comp $file 2>1`;
+   return (-e $obj) ? `ls -l $obj` : 0;
+}

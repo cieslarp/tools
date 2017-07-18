@@ -1,0 +1,17 @@
+#!/usr/local/bin/perl
+
+while (<>) {
+    if (/^(\d+):(.*)/) {
+        $start = $1 unless $start;
+        printf "%9d [%15d] : $2\n",($1-$lt),($1-$start);
+        $lt = $1;
+	} elsif (/^(\d{4}).(\d{2}).(\d{2})-(\d+):(\d+):(\d+):(\d+),(.*)/ ) { #RASLOG 2011/01/10-13:28:32:792978, [SPM-5001] ...
+		my $ts = sprintf("%d%02d%02d.%d", $4, $5, $6, $7);
+		$rstart = $ts unless $rstart;
+        printf "%6.6f [%6.6f]($ts) : $8\n",($ts-$rlt),($ts-$rstart);
+		$rlt = $ts;
+
+    } else {
+        print $_;
+    }
+}

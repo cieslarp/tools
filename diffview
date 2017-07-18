@@ -1,0 +1,12 @@
+#!/bin/csh
+
+echo "Diff with view $1";
+cleartool startview $1
+foreach j (`out`)
+  if ( { cmp -s $j /view/$1/$j } ) then
+    echo "No diff: $j /view/$1/$j"
+  else
+  	vd $j /view/$1/$j
+#  sleep 1;
+  endif
+end

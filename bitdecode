@@ -1,0 +1,78 @@
+#!/usr/bin/perl -w
+
+# bit masks
+@masks = (0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095,
+	  8191, 16383, 32767, 65535, 131071, 262143, 524287, 1048575, 2097151,
+	  4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455,
+	  536870911, 1073741823, 2147483647, 4294967295);
+%subfield=();
+$decoded1=0;
+
+sub printbits {
+    my $val=$_[0];
+    print "$val\n";
+    if ($val =~ /^0x/) { $val=oct($val); }
+    for ($i=0; $i<$#cur; $i+=3) {
+	my $width = $cur[$i];
+	my $f=$val>>$cur[$i+1] & $masks[$width];
+	my $msg = $cur[$i+2];
+	if ($msg =~ /\:\:(\w+)\:\:/) {
+	    my $sel = $1;
+	    if (defined($subfield{$sel,$f})) {
+		$msg =~ s/\:\:\w+\:\:/: $subfield{$sel,$f}/;
+	    } else {
+		$msg =~ s/\:\:\w+\:\:/: ***BADVALUE***/;
+	    }
+	}
+	printf("<%02d:%02d> 0x%-08.*x %10d %s\n",
+	       $cur[$i+1]+$width-1,$cur[$i+1],
+	       int(($width+3)/4),$f,
+	       $f,$msg);
+	#printf("%0.*b\t%d %s\n",$width,$f,$f,$msg);
+    }
+    $decoded1=1;
+}
+
+sub setbits {
+    open(F,"<$_[0]") || die "Can not open $_[0]!";
+    undef @cur;
+    undef %subfield;
+    my $i = 0;
+    while (<F>) {
+	next if (/^\s*\#/); 	# Skip comments
+	next if (/^\s*$/);	# and blank lines
+	chomp;
+	if (/\:\:(\w+)\:\:\s*(\d+)\s(.*)/) {
+	    $subfield{$1,$2}=$3;
+	} else {
+	    $cur[$i]=1;
+	    ($cur[$i+1],$cur[$i+2])=m/^([\d-]+)\s(.*)/;
+	    if ($cur[$i+1] =~ /(\d+)-(\d+)/) {
+		$cur[$i+1] = $2;
+		$cur[$i] = 1+$1-$2;
+	    }
+	    $i+=3;
+	}
+    }
+}
+
+foreach $arg (@ARGV) {
+    if ( -e $arg ) { setbits($arg) ;}
+    elsif ( -e "~/lib/bitdecode/$arg" ) { setbits("~/lib/bitdecode/$arg") ;}
+    elsif ( -e "/proj/sustaining/lib/bitdecode/$arg" ) {
+	setbits("/proj/sustaining/lib/bitdecode/$arg") ;}
+    else { printbits($arg) ; }
+}
+
+if ($#ARGV >= 0) {
+    if (!$decoded1) {
+	while(<STDIN>) {
+	    chomp;
+	    printbits($_);
+	}
+    }
+} else {
+    print STDERR "Usage: $0 decodespec number [number ...]"
+	. "[decodespec number ....]\n";
+    exit(1);
+}

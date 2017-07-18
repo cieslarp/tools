@@ -1,0 +1,27 @@
+#!/usr/local/bin/perl
+
+$input = shift || "none";
+$start = "\%{[";
+$end   = "m\%}";
+#$start = "[";
+#$end   = "m";
+($c,$a) = split(/-/,$input);
+%colors = (
+   none    => 00,
+   black   => 30,
+   red     => 31,
+   green   => 32,
+   yellow  => 33,
+   blue    => 34,
+   magenta => 35,
+   cyan    => 36,
+   white   => 37,
+);
+
+$alt = "01";
+$alt = "00" if $a =~ /-d/;
+$alt = "04" if $a =~ /-u/;
+$alt = "05" if $a =~ /-f/;
+
+print $start.$alt.";".$colors{$c}.$end;
+print @ARGV;

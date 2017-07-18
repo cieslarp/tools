@@ -1,0 +1,33 @@
+#!/usr/local/bin/perl
+
+my $Search = shift || die "$0 <search_string> <input>\n";
+my $in = 0;
+push(@ARGV, "[stdin]") unless scalar @ARGV > 0;
+
+$file = "<stdin>";
+$fh = STDIN;
+
+foreach my $arg (sort @ARGV) {
+	if ($arg =~ /^-/) {
+	} elsif (-r $arg) {
+		next unless open(FILE, $arg);
+		$file = $arg;
+		$fh = FILE;
+	}
+
+	while (my $line = <$fh>) {
+		$in++ if ($line =~ /$Search/);
+		if ($in) {
+			print "$file:\n" unless $FilePrinted{$file}++;
+			print $line;
+
+			# Now search for the end of this potentially multi line function call
+			print "in:$in line($line)\n" if $debug;
+			$in += $line =~ /\(/;
+			print "after '(' in:$in line($line)\n" if $debug;
+			$in -= $line =~ /\)/;
+			print "after ')' in:$in line($line)\n" if $debug;
+		}
+		$in = 0 if ($line =~ /;/);
+	}
+}

@@ -1,0 +1,48 @@
+#!/usr/local/bin/perl
+
+my @priv = `cleartool lsprivate -size`;
+
+if (open(LSP, "cleartool lsprivate -size |")) {
+	while (my $line = <LSP>) {
+		if ($line =~ /\s+Size:\s+(\d+)/) {
+			$FileSize{$File} = $1;
+		} else {
+			chomp($line);
+			$File = $line;
+			$line =~ /(\d+)/;
+			$FileSize{$File} = $1;
+		}
+	}
+	foreach my $f (sort {$FileSize{$a} <=> $FileSize{$b}} keys %FileSize) {
+		printf "%14s : %s\n", addcommas($FileSize{$f}), $f;
+		}
+}
+
+exit();
+
+###############################################################
+sub addcommas() {
+	# put commas in the right places in an integer
+	my $input = shift; 
+	1 while $input =~ s/(\d)(\d\d\d)(?!\d)/$1,$2/g;
+	return $input;
+}   
+
+
+##### old slow way ######
+print("get private\n");
+my @priv = `cleartool lsprivate`;
+print "get size\n";
+foreach my $p (@priv) {
+    chomp($p);
+    my ($f,$other) = split(/\s+/,$p,2);
+    my $size = (-d $f) ? -1 : (stat($f))[7];
+    $p .= " [Dir]" if -d $f;
+    $FileSize{$p} = $size;
+}
+print "sort\n";
+my @SList = sort {$FileSize{$a} <=> $FileSize{$b}} keys(%FileSize);
+
+foreach my $f (@SList) {
+    printf "%14d : $f\n", $FileSize{$f};
+}

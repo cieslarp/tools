@@ -1,0 +1,35 @@
+#!/usr/local/bin/perl
+my $ip = shift;
+my $Quiet = 1 if $ARGV[0] =~ /q/i;
+my $khf = "~/.ssh/known_hosts";
+
+die "Enter a valid IP address to remove (not $ip)\n" unless $ip =~ /^\d+\.\d+\.\d+\.\d+$/g;
+
+my $ipu = join("_", split(/\./,$ip));
+my $found = 0;
+
+$khwd = `cd ~/.ssh/; pwd`;
+chomp($khwd);
+chdir($khwd);
+
+$newkh = "known_hosts.new" . $$;
+
+sleep(1) while !open(KH, "known_hosts");
+open(OKN, ">$newkh") || die;
+while (my $line = <KH>) {
+	my $uline = join("_", split(/\./,$line,5));
+	if ($uline =~ /$ipu/) {
+		print STDERR "Removed $ip [$line]\n" unless $Quiet;
+		$found++;
+	} else {
+		print OKN $line;
+	}
+}
+
+die "[$ip] Not found in $khf\n" unless ($found || $Quiet);
+
+system("cp -f known_hosts known_hosts.bak");
+system("mv -f $newkh known_hosts");
+
+close(KH);
+close(OKN);

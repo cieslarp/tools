@@ -1,0 +1,27 @@
+#!/usr/local/bin/perl
+
+my $chip = shift || ".";
+my $port = shift || ".";
+my $user = ".";
+
+if ($chip =~ /u(\d+)/) {
+	$user = "^" . $1 . "\$";
+	$port = $chip = "-999";
+}
+printf "port=%s chip=%s user=%s\n", $port, $chip, $user;
+
+# Assume this format: CTL BPt  UPt  SPt  MPt  CPt  IFi  GPt  M#   C#   Sw#    G#   ChID    PBPt:ISL
+#                      0   1    2    3    4    5    6    7   8    9    10     11    12      13-
+my $slot = 0;
+
+while (my $line = <>) {
+	if ($line =~ /bladeportmap\s+(\d+)/) { $slot = $1; }
+	if ($line =~ /^DIS|^ENB/) {
+		chomp($line);
+		my @s = split(/\s+/,$line, 13);
+		if (($s[9] == $chip  && $s[5] == $port) || ($s[2] =~ /$user/)) {
+			printf "Slot=%2d/",$slot if $slot;
+			printf "%-3d m%d c%d p%-3d u%-4d Spt=%-3d (%s)\n", $s[1], $s[8], $s[9], $s[5], $s[2], $s[3], $s[12] ;
+		}
+	}
+}
